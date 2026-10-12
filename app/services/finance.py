@@ -18,6 +18,13 @@ class PaymentService(CrudService):
     label = "缴费记录"
     search_fields = ("id", "note", "method")
 
+    def _match(self, row: dict, kw: str) -> bool:
+        """扩展：支持按学员姓名搜索（前端搜索框行为）。"""
+        if super()._match(row, kw):
+            return True
+        student = db.find("students", row.get("studentId") or "")
+        return bool(student and kw in str(student.get("name") or "").lower())
+
     def list(
         self,
         *,

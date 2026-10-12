@@ -10,7 +10,7 @@ class CourseService(CrudService):
     coll = "courses"
     prefix = "KC"
     label = "课程"
-    search_fields = ("name", "category", "level", "target")
+    search_fields = ("id", "name", "category", "level", "target")
 
     def list(self, *, category: str | None = None, level: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"category": category, "level": level}, **kwargs)
@@ -26,7 +26,7 @@ class ClassService(CrudService):
     coll = "classes"
     prefix = "BJ"
     label = "班级"
-    search_fields = ("name", "classroom", "schedule")
+    search_fields = ("id", "name", "classroom", "schedule")
 
     def list(self, *, course_id: str | None = None, teacher_id: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"courseId": course_id, "teacherId": teacher_id}, **kwargs)
@@ -77,7 +77,7 @@ class StudentService(CrudService):
     coll = "students"
     prefix = "XS"
     label = "学员"
-    search_fields = ("name", "parent", "parentPhone", "grade")
+    search_fields = ("id", "name", "parent", "parentPhone", "grade")
 
     def list(self, *, class_id: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"classId": class_id} if class_id else None, **kwargs)

@@ -9,7 +9,7 @@ class NewsService(CrudService):
     coll = "news"
     prefix = "XW"
     label = "新闻"
-    search_fields = ("title", "summary", "author")
+    search_fields = ("id", "title", "summary", "author")
     default_order = "date"          # 置顶优先 + 日期倒序（见 _sort 覆盖）
 
     def _sort(self, rows: list[dict], field: str) -> list[dict]:
@@ -45,7 +45,7 @@ class ResourceService(CrudService):
     coll = "resources"
     prefix = "ZY"
     label = "课件资源"
-    search_fields = ("title", "type")
+    search_fields = ("id", "title", "type")
 
     def list(
         self,

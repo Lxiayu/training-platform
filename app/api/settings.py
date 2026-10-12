@@ -18,3 +18,9 @@ def get_settings(_user: dict = Depends(get_current_user)):
 @router.put("")
 def update_settings(body: SettingsUpdate, _admin: dict = Depends(require_admin)):
     return ok(settings_service.update(body.model_dump(by_alias=True, exclude_unset=True)))
+
+
+@router.post("/reset")
+def reset_demo_data(_admin: dict = Depends(require_admin)):
+    """一键重置演示数据：全部业务数据回到初始种子状态。"""
+    return ok(settings_service.reset(), "演示数据已重置为初始状态")

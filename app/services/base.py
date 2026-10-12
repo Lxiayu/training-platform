@@ -40,9 +40,9 @@ class CrudService:
         for key, value in filters.items():
             if value not in (None, "", "全部"):
                 rows = [r for r in rows if str(r.get(key)) == str(value)]
-        if keyword and keyword.strip() and self.search_fields:
-            kw = keyword.strip()
-            rows = [r for r in rows if any(kw in str(r.get(f) or "") for f in self.search_fields)]
+        if keyword and keyword.strip():
+            kw = keyword.strip().lower()
+            rows = [r for r in rows if self._match(r, kw)]
         rows = self._sort(rows, order_by or self.default_order)
         total = len(rows)
         start = (page - 1) * page_size
@@ -56,6 +56,10 @@ class CrudService:
     def decorate(self, row: dict) -> dict:
         """输出前加工：子类覆盖以附加派生字段（enrolled、关联名等）。"""
         return row
+
+    def _match(self, row: dict, kw: str) -> bool:
+        """关键词匹配（已 lower）：默认按 search_fields 模糊包含。子类可扩展关联字段。"""
+        return any(kw in str(row.get(f) or "").lower() for f in self.search_fields)
 
     def _sort(self, rows: list[dict], field: str) -> list[dict]:
         if not field:

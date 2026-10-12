@@ -105,7 +105,7 @@ class TeacherService(CrudService):
     coll = "teachers"
     prefix = "JS"
     label = "教师"
-    search_fields = ("name", "phone", "email", "subject", "title")
+    search_fields = ("id", "name", "phone", "email", "subject", "title")
 
     def list(self, *, subject: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"subject": subject} if subject else None, **kwargs)

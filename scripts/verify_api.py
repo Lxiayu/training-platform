@@ -369,6 +369,68 @@ def scenario_settings_users(admin_token: str, jw_token: str):
     check("字段长度校验 -> 422", r.status_code == 422)
 
 
+# ---------------------------------------------------------------- 前端对齐项（阶段三）
+
+def scenario_align(admin_token: str, jw_token: str):
+    print("== 前端对齐项（搜索字段 / 待确认金额 / 重置数据） ==")
+
+    # ---- 搜索字段对齐：支持按业务编号搜索（大小写不敏感） ----
+    r = client.get("/api/v1/courses", params={"keyword": "kc001"}, headers=auth(admin_token))
+    rows = data_of(r.json())["list"]
+    check("课程按编号搜索（大小写不敏感）", len(rows) == 1 and rows[0]["id"] == "KC001")
+
+    r = client.get("/api/v1/teachers", params={"keyword": "JS001"}, headers=auth(admin_token))
+    check("教师按编号搜索", len(data_of(r.json())["list"]) == 1)
+
+    r = client.get("/api/v1/classes", params={"keyword": "A101"}, headers=auth(admin_token))
+    check("班级按教室搜索", len(data_of(r.json())["list"]) >= 1)
+
+    r = client.get("/api/v1/students", params={"keyword": "XS001"}, headers=auth(admin_token))
+    check("学员按编号搜索", len(data_of(r.json())["list"]) == 1)
+
+    # ---- 缴费支持按学员姓名搜索（前端搜索框行为） ----
+    r = client.get("/api/v1/payments", params={"pageSize": 1}, headers=auth(admin_token))
+    first = data_of(r.json())["list"][0]
+    r = client.get("/api/v1/payments", params={"keyword": first["studentName"], "pageSize": 100}, headers=auth(admin_token))
+    rows = data_of(r.json())["list"]
+    check("缴费按学员姓名搜索", len(rows) >= 1
+          and any(p["studentName"] == first["studentName"] for p in rows))
+
+    # ---- 工作台收入卡片补充待确认口径 ----
+    r = client.get("/api/v1/dashboard/summary", headers=auth(admin_token))
+    summary = data_of(r.json())
+    r = client.get("/api/v1/payments/stats", headers=auth(admin_token))
+    stats = data_of(r.json())
+    check("summary 含待确认金额且口径一致",
+          summary["income"]["pending"] == stats["pendingAmount"]
+          and summary["income"]["pendingCount"] == stats["pendingCount"])
+
+    # ---- 一键重置演示数据 ----
+    r = client.get("/api/v1/courses", params={"pageSize": 100}, headers=auth(admin_token))
+    course_total = data_of(r.json())["total"]
+
+    r = client.post("/api/v1/courses", headers=auth(admin_token), json={
+        "name": "对齐测试临时课程", "category": "Scratch", "level": "入门",
+        "hours": 8, "price": 800, "target": "测试", "desc": "将被重置",
+    })
+    check("创建临时课程", r.status_code == 200)
+
+    r = client.post("/api/v1/settings/reset", headers=auth(jw_token))
+    check("非管理员重置 -> 403", r.status_code == 403)
+
+    r = client.post("/api/v1/settings/reset", headers=auth(admin_token))
+    check("管理员重置演示数据", r.status_code == 200 and "org" in data_of(r.json()))
+
+    r = client.get("/api/v1/courses", params={"keyword": "对齐测试临时课程"}, headers=auth(admin_token))
+    check("重置后临时课程已清除", data_of(r.json())["total"] == 0)
+
+    r = client.get("/api/v1/courses", params={"pageSize": 100}, headers=auth(admin_token))
+    check("课程数量回到种子状态", data_of(r.json())["total"] == course_total)
+
+    r = client.get("/api/v1/users", headers=auth(admin_token))
+    check("重置后管理员仍可正常使用", r.status_code == 200 and data_of(r.json())["total"] == 5)
+
+
 def main() -> int:
     admin_token, jw_token = scenario_auth()
     scenario_teachers_courses(admin_token)
@@ -377,6 +439,7 @@ def main() -> int:
     scenario_students_payments(admin_token)
     scenario_news_resources(admin_token)
     scenario_settings_users(admin_token, jw_token)
+    scenario_align(admin_token, jw_token)
 
     total = PASSED + len(FAILED)
     print(f"\n===== 冒烟验证：{PASSED}/{total} 通过 =====")

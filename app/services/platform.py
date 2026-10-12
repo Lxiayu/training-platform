@@ -14,6 +14,7 @@ class DashboardService:
         classes = db.alive("classes")
         payments = db.alive("payments")
         paid = [p for p in payments if p.get("status") == "已支付"]
+        pending = [p for p in payments if p.get("status") == "待确认"]
         month_prefix = datetime.now().strftime("%Y-%m")
 
         def _sum(items: list[dict]) -> float:
@@ -36,6 +37,8 @@ class DashboardService:
             "income": {
                 "month": _sum([p for p in paid if str(p.get("date") or "").startswith(month_prefix)]),
                 "total": _sum(paid),
+                "pending": _sum(pending),
+                "pendingCount": len(pending),
             },
         }
 
@@ -115,3 +118,8 @@ class SettingsService:
         if "newStudentStatus" in settings_patch and settings_patch["newStudentStatus"] not in NEW_STUDENT_STATUS_OPTIONS:
             raise BizException(400, "新学员默认状态仅支持：在读 / 休学")
         return db.save_settings(org_patch, settings_patch)
+
+    def reset(self) -> dict:
+        """一键重置演示数据（仅管理员入口调用）：全部集合回到种子状态。"""
+        data = db.reset()
+        return {"org": data["org"], "settings": data["settings"]}

@@ -41,3 +41,6 @@ Thumbs.db
 # 日志
 *.log
 logs/
+
+# 办公文档（不入库）
+*.docx

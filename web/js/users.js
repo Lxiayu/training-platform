@@ -1,15 +1,16 @@
 /* ============================================================
  * users.js —— 用户管理（仅超级管理员）
  * 账号增删改 / 角色分配 / 启用禁用 / 重置密码
+ * 数据来源：/api/v1/users（仅管理员可拉取，普通角色被引导回工作台）
  * ============================================================ */
 
 let currentEditKey = null;   // 当前编辑用户的登录账号（主键）
 
-document.addEventListener('DOMContentLoaded', () => {
-  const user = renderLayout('users');
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await boot('users');
   if (!user) return;
 
-  // 权限守卫：非超级管理员禁止访问本页
+  // 权限守卫：非超级管理员禁止访问本页（后端接口同样返回 403）
   if (!isAdmin(user)) {
     showToast('您没有权限访问用户管理', 'error');
     setTimeout(() => location.href = 'dashboard.html', 1200);
@@ -72,43 +73,34 @@ function renderTable() {
 }
 
 /* ---------- 行操作 ---------- */
-function onTableClick(e) {
+async function onTableClick(e) {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const { act, id } = btn.dataset;
   const u = DB.users.find(x => x.username === id);
   if (!u) return;
-  const me = getSessionUser();
 
   if (act === 'edit') {
     openEditor(u);
   } else if (act === 'resetpwd') {
-    askConfirm('重置密码', `确定将「${u.name}（${u.username}）」的密码重置为初始密码 123456 吗？`, () => {
-      u.password = '123456';
-      saveDB();
-      showToast('密码已重置为 123456');
+    askConfirm('重置密码', `确定将「${u.name}（${u.username}）」的密码重置为初始密码 123456 吗？`, async () => {
+      const rec = await apiOk(() => api.resetPassword(id));
+      if (!rec) return;
+      showToast(`密码已重置为 ${rec.initialPassword}`);
     });
   } else if (act === 'toggle') {
-    if (u.username === me.username) { showToast('不能禁用当前登录账号', 'error'); return; }
-    if (u.status === '启用' && lastActiveAdmin(u)) { showToast('系统至少需保留一个启用的超级管理员', 'error'); return; }
-    u.status = u.status === '启用' ? '禁用' : '启用';
-    saveDB(); renderTable();
-    showToast(u.status === '启用' ? `账号「${u.username}」已启用` : `账号「${u.username}」已禁用，该账号将无法登录`);
+    // 不能禁用自己 / 至少保留一名启用管理员等规则由后端校验（409 提示）
+    const next = u.status === '启用' ? '禁用' : '启用';
+    if (!await apiOk(() => api.update('users', id, { status: next }))) return;
+    await hydrate(); renderTable();
+    showToast(next === '启用' ? `账号「${u.username}」已启用` : `账号「${u.username}」已禁用，该账号将无法登录`);
   } else if (act === 'del') {
-    if (u.username === me.username) { showToast('不能删除当前登录账号', 'error'); return; }
-    if (lastActiveAdmin(u)) { showToast('系统至少需保留一个启用的超级管理员', 'error'); return; }
-    askConfirm('删除用户', `确定删除用户「${u.name}（${u.username}）」吗？删除后该账号将无法登录。`, () => {
-      DB.users = DB.users.filter(x => x.username !== u.username);
-      saveDB(); renderTable();
+    askConfirm('删除用户', `确定删除用户「${u.name}（${u.username}）」吗？删除后该账号将无法登录。`, async () => {
+      if (!await apiOk(() => api.remove('users', id))) return;
+      await hydrate(); renderTable();
       showToast('用户已删除');
     });
   }
-}
-
-// 判断：u 是否为系统最后一个「启用的超级管理员」
-function lastActiveAdmin(u) {
-  return u.role === '超级管理员' && u.status === '启用' &&
-    DB.users.filter(x => x.role === '超级管理员' && x.status === '启用').length === 1;
 }
 
 /* ---------- 新增 / 编辑 ---------- */
@@ -119,7 +111,8 @@ function openEditor(u) {
   $('#f-username').disabled = !!u;
   $('#f-name').value = u ? u.name : '';
   $('#f-pwd').value = '';
-  $('#f-pwd').placeholder = u ? '留空表示不修改密码' : '请输入初始密码（至少 6 位）';
+  $('#f-pwd').disabled = !!u;
+  $('#f-pwd').placeholder = u ? '编辑不支持修改密码，请使用「重置密码」' : '初始密码，留空默认 123456（至少 6 位）';
   $('#f-role-edit').value = u ? u.role : '教务管理员';
   $('#f-phone').value = u ? (u.phone || '') : '';
   $('#f-email').value = u ? (u.email || '') : '';
@@ -129,7 +122,7 @@ function openEditor(u) {
   if (!u) $('#f-username').focus(); else $('#f-name').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const username = $('#f-username');
   const name = $('#f-name');
   const pwd = $('#f-pwd');
@@ -138,47 +131,26 @@ function submitForm() {
   const isEdit = !!currentEditKey;
 
   if (!valid([[username, '登录账号'], [name, '姓名'], [phone, '手机号'], [joinDate, '加入日期']])) return;
-  if (!isEdit && pwd.value.length < 6) { showToast('初始密码至少需要 6 位', 'error'); pwd.focus(); return; }
+  if (!isEdit && pwd.value && pwd.value.length < 6) { showToast('初始密码至少需要 6 位', 'error'); pwd.focus(); return; }
   if (!/^\d{11}$/.test(phone.value.trim())) { showToast('请输入 11 位手机号', 'error'); phone.focus(); return; }
 
-  const role = $('#f-role-edit').value;
-  const status = $('#f-status-edit').value;
-
-  if (!isEdit && DB.users.some(x => x.username === username.value.trim())) {
-    showToast('该登录账号已存在，请更换', 'error'); username.focus(); return;
-  }
-  if (isEdit) {
-    const target = DB.users.find(x => x.username === currentEditKey);
-    const me = getSessionUser();
-    if (target && target.username === me.username && status === '禁用') {
-      showToast('不能禁用当前登录账号', 'error'); return;
-    }
-    if (target && lastActiveAdmin(target) && (role !== '超级管理员' || status === '禁用')) {
-      showToast('系统至少需保留一个启用的超级管理员', 'error'); return;
-    }
-  }
-
   const data = {
+    username: username.value.trim(),
     name: name.value.trim(),
-    role,
+    role: $('#f-role-edit').value,
     phone: phone.value.trim(),
     email: $('#f-email').value.trim(),
     joinDate: joinDate.value,
-    status
+    status: $('#f-status-edit').value
   };
+  if (!isEdit && pwd.value) data.password = pwd.value;   // 留空则由后端使用默认密码 123456
 
-  if (isEdit) {
-    const idx = DB.users.findIndex(x => x.username === currentEditKey);
-    if (idx > -1) {
-      DB.users[idx] = { ...DB.users[idx], ...data };
-      if (pwd.value) DB.users[idx].password = pwd.value;
-    }
-  } else {
-    DB.users.push({ username: username.value.trim(), password: pwd.value, ...data });
-  }
-  saveDB();
+  // 账号重复 / 禁用自己 / 最后一名管理员等规则由后端校验（409 提示）
+  if (!await apiOk(() => isEdit ? api.update('users', currentEditKey, data) : api.create('users', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderTable();
-  showToast(isEdit ? '用户信息已更新' : `用户「${data.name}」创建成功，初始密码已生效`);
+  showToast(isEdit ? '用户信息已更新'
+    : `用户「${data.name}」创建成功，初始密码为 ${data.password || '123456'}`);
 }
 

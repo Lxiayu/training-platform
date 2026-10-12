@@ -1,11 +1,12 @@
 /* ============================================================
  * teachers.js —— 教师管理：列表 / 搜索筛选 / 新增编辑 / 删除
+ * 数据来源：/api/v1/teachers（boot 后缓存于 DB.teachers）
  * ============================================================ */
 
 let currentEditId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('teachers')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('teachers')) return;
 
   $('#kw').addEventListener('input', renderTable);
   $('#f-subject').addEventListener('change', renderTable);
@@ -68,11 +69,10 @@ function onTableClick(e) {
   if (act === 'edit') {
     openEditor(t);
   } else if (act === 'del') {
-    const used = DB.classes.filter(b => b.teacherId === id).length;
-    if (used) { showToast(`该教师还负责 ${used} 个班级的教学，无法删除`, 'error'); return; }
-    askConfirm('删除教师', `确定删除教师「${t.name}」吗？删除后不可恢复。`, () => {
-      DB.teachers = DB.teachers.filter(x => x.id !== id);
-      saveDB(); renderTable();
+    // 是否仍负责班级等业务校验由后端执行（冲突返回 409 并提示原因）
+    askConfirm('删除教师', `确定删除教师「${t.name}」吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('teachers', id))) return;
+      await hydrate(); renderTable();
       showToast('教师已删除');
     });
   }
@@ -94,7 +94,7 @@ function openEditor(t) {
   $('#f-name').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const name = $('#f-name');
   const phone = $('#f-phone');
   const hireDate = $('#f-hiredate');
@@ -113,13 +113,8 @@ function submitForm() {
     status: $('#f-status-edit').value
   };
 
-  if (isEdit) {
-    const idx = DB.teachers.findIndex(t => t.id === currentEditId);
-    if (idx > -1) DB.teachers[idx] = { ...DB.teachers[idx], ...data };
-  } else {
-    DB.teachers.push({ id: nextId('JS', DB.teachers), ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('teachers', currentEditId, data) : api.create('teachers', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderTable();
   showToast(isEdit ? '教师信息已更新' : `教师「${data.name}」创建成功`);

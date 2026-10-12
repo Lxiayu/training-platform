@@ -111,9 +111,6 @@ const courseName  = id => (byId(DB.courses,  id) || {}).name  || '—';
 const teacherName = id => (byId(DB.teachers, id) || {}).name  || '—';
 const studentName = id => (byId(DB.students, id) || {}).name  || '—';
 const className   = id => (byId(DB.classes,  id) || {}).name  || '—';
-function classEnrolled(classId) {
-  return DB.students.filter(s => s.classId === classId && s.status === '在读').length;
-}
 
 /* ---------- 头像 / 徽章 / 空状态 ---------- */
 const AVATAR_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'];

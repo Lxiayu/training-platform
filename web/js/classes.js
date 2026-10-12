@@ -1,11 +1,12 @@
 /* ============================================================
  * classes.js —— 班级管理：列表 / 筛选 / 排班 / 报名进度 / 删除
+ * 数据来源：/api/v1/classes（boot 后缓存于 DB.classes，在读人数用后端 enrolled）
  * ============================================================ */
 
 let currentEditId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('classes')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('classes')) return;
 
   fillSelects();
 
@@ -44,7 +45,7 @@ function renderTable() {
   const list = getFiltered();
   $('#count').textContent = list.length;
   $('#tbody').innerHTML = list.length ? list.map(c => {
-    const enrolled = classEnrolled(c.id);
+    const enrolled = c.enrolled;   // 后端口径：该班级全部在册学员数
     const pct = Math.min(100, Math.round(enrolled / (c.capacity || 1) * 100));
     const full = enrolled >= c.capacity;
     return `
@@ -85,11 +86,10 @@ function onTableClick(e) {
   if (act === 'edit') {
     openEditor(c);
   } else if (act === 'del') {
-    const n = DB.students.filter(s => s.classId === id).length;
-    if (n) { showToast(`该班级还有 ${n} 名学员，无法删除`, 'error'); return; }
-    askConfirm('删除班级', `确定删除班级「${c.name}」吗？删除后不可恢复。`, () => {
-      DB.classes = DB.classes.filter(x => x.id !== id);
-      saveDB(); renderTable();
+    // 是否仍有学员等业务校验由后端执行（冲突返回 409 并提示原因）
+    askConfirm('删除班级', `确定删除班级「${c.name}」吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('classes', id))) return;
+      await hydrate(); renderTable();
       showToast('班级已删除');
     });
   }
@@ -111,7 +111,7 @@ function openEditor(c) {
   $('#f-name').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const name = $('#f-name');
   const capacity = $('#f-capacity');
   const schedule = $('#f-schedule');
@@ -135,13 +135,8 @@ function submitForm() {
     status: $('#f-status-edit').value
   };
 
-  if (isEdit) {
-    const idx = DB.classes.findIndex(c => c.id === currentEditId);
-    if (idx > -1) DB.classes[idx] = { ...DB.classes[idx], ...data };
-  } else {
-    DB.classes.push({ id: nextId('BJ', DB.classes), ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('classes', currentEditId, data) : api.create('classes', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderTable();
   showToast(isEdit ? '班级信息已更新' : `班级「${data.name}」排班成功`);

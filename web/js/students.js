@@ -1,11 +1,12 @@
 /* ============================================================
  * students.js —— 学生管理：列表 / 筛选 / 新增编辑 / 删除
+ * 数据来源：/api/v1/students（boot 后缓存于 DB.students）
  * ============================================================ */
 
 let currentEditId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('students')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('students')) return;
 
   // 班级下拉（工具栏筛选 + 编辑表单共用渲染）
   const classOptions = () => {
@@ -83,11 +84,11 @@ function onTableClick(e) {
   if (act === 'edit') {
     openEditor(s);
   } else if (act === 'del') {
+    // 缴费记录由后端级联删除；本地计数仅用于确认提示文案
     const paid = DB.payments.filter(p => p.studentId === id).length;
-    askConfirm('删除学员', `确定删除学员「${s.name}」吗？${paid ? `该学员有 ${paid} 条缴费记录，将一并删除。` : ''}删除后不可恢复。`, () => {
-      DB.students = DB.students.filter(x => x.id !== id);
-      DB.payments = DB.payments.filter(p => p.studentId !== id);
-      saveDB(); renderTable();
+    askConfirm('删除学员', `确定删除学员「${s.name}」吗？${paid ? `该学员有 ${paid} 条缴费记录，将一并删除。` : ''}删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('students', id))) return;
+      await hydrate(); renderTable();
       showToast('学员已删除');
     });
   }
@@ -104,12 +105,13 @@ function openEditor(s) {
   $('#f-parent-phone').value = s ? (s.parentPhone || '') : '';
   $('#f-class-edit').value = s ? s.classId : ($('#f-class-edit').value || '');
   $('#f-enrolldate').value = s ? s.enrollDate : todayStr();
-  $('#f-status-edit').value = s ? s.status : '在读';
+  // 新学员默认状态跟随「系统设置」
+  $('#f-status-edit').value = s ? s.status : (DB.settings.newStudentStatus || '在读');
   openModal('editor-modal');
   $('#f-name').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const name = $('#f-name');
   const parent = $('#f-parent');
   const parentPhone = $('#f-parent-phone');
@@ -131,13 +133,8 @@ function submitForm() {
     status: $('#f-status-edit').value
   };
 
-  if (isEdit) {
-    const idx = DB.students.findIndex(s => s.id === currentEditId);
-    if (idx > -1) DB.students[idx] = { ...DB.students[idx], ...data };
-  } else {
-    DB.students.push({ id: nextId('XS', DB.students), ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('students', currentEditId, data) : api.create('students', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderTable();
   showToast(isEdit ? '学员信息已更新' : `学员「${data.name}」报名成功`);

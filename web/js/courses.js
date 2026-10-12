@@ -1,9 +1,10 @@
 /* ============================================================
  * courses.js —— 课程管理：列表 / 搜索筛选 / 新增编辑 / 上下架 / 删除
+ * 数据来源：/api/v1/courses（boot 后缓存于 DB.courses）
  * ============================================================ */
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('courses')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('courses')) return;
 
   $('#kw').addEventListener('input', renderTable);
   $('#f-category').addEventListener('change', renderTable);
@@ -53,7 +54,7 @@ function renderTable() {
 }
 
 /* ---------- 行操作 ---------- */
-function onTableClick(e) {
+async function onTableClick(e) {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const { act, id } = btn.dataset;
@@ -63,15 +64,15 @@ function onTableClick(e) {
   if (act === 'edit') {
     openEditor(c);
   } else if (act === 'toggle') {
-    c.status = c.status === '在售' ? '停售' : '在售';
-    saveDB(); renderTable();
-    showToast(c.status === '在售' ? `课程「${c.name}」已上架` : `课程「${c.name}」已停售`);
+    const next = c.status === '在售' ? '停售' : '在售';
+    if (!await apiOk(() => api.update('courses', id, { status: next }))) return;
+    await hydrate(); renderTable();
+    showToast(next === '在售' ? `课程「${c.name}」已上架` : `课程「${c.name}」已停售`);
   } else if (act === 'del') {
-    const used = DB.classes.filter(b => b.courseId === id).length;
-    if (used) { showToast(`该课程下还有 ${used} 个班级在使用，无法删除`, 'error'); return; }
-    askConfirm('删除课程', `确定删除课程「${c.name}」吗？删除后不可恢复。`, () => {
-      DB.courses = DB.courses.filter(x => x.id !== id);
-      saveDB(); renderTable();
+    // 是否被班级使用等业务校验由后端执行（冲突返回 409 并提示原因）
+    askConfirm('删除课程', `确定删除课程「${c.name}」吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('courses', id))) return;
+      await hydrate(); renderTable();
       showToast('课程已删除');
     });
   }
@@ -95,7 +96,7 @@ function openEditor(c) {
   $('#f-name').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const name = $('#f-name');
   const hours = $('#f-hours');
   const price = $('#f-price');
@@ -114,13 +115,8 @@ function submitForm() {
     desc: $('#f-desc').value.trim()
   };
 
-  if (isEdit) {
-    const idx = DB.courses.findIndex(c => c.id === currentEditId);
-    if (idx > -1) DB.courses[idx] = { ...DB.courses[idx], ...data };
-  } else {
-    DB.courses.push({ id: nextId('KC', DB.courses), ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('courses', currentEditId, data) : api.create('courses', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderTable();
   showToast(isEdit ? '课程信息已更新' : `课程「${data.name}」创建成功`);

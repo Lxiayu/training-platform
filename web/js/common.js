@@ -1,10 +1,8 @@
 /* ============================================================
- * common.js —— 公共脚本：数据存取 / 布局渲染 / 通用组件
- * 依赖：data.js（先于本文件引入）
+ * common.js —— 公共脚本：布局渲染 / 数据缓存 / 通用组件
+ * 依赖：api.js（先于本文件引入）
+ * 数据来源：FastAPI /api/v1，页面 boot 后统一拉取到 window.DB
  * ============================================================ */
-
-const DB_KEY = 'qihang_demo_db_v1';
-const SESSION_KEY = 'qihang_demo_session';
 
 /* ---------- 图标库（feather 风格内联 SVG） ---------- */
 const _svg = (p) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
@@ -60,10 +58,6 @@ function todayStr() {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-function nextId(prefix, list) {
-  const max = list.reduce((m, x) => Math.max(m, parseInt(String(x.id).replace(/\D/g, ''), 10) || 0), 0);
-  return prefix + String(max + 1).padStart(3, '0');
-}
 function valid(fields) {
   for (const [el, name] of fields) {
     if (!el.value.trim()) { showToast(`请填写${name}`, 'error'); el.focus(); return false; }
@@ -71,30 +65,45 @@ function valid(fields) {
   return true;
 }
 
-/* ---------- 数据存取（localStorage 持久化） ---------- */
-const DB_VERSION = 2;   // v1: 基础模块 + 单账号；v2: 多用户 / 新闻中心 / 课件资源
-function loadDB() {
-  let db = null;
-  try { db = JSON.parse(localStorage.getItem(DB_KEY)); } catch (e) { /* 数据损坏则重建 */ }
-  if (!db || !db.courses) {
-    db = JSON.parse(JSON.stringify(DEFAULT_DB));
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-  } else if (!db.meta || db.meta.version < DB_VERSION) {
-    // —— 旧版本数据迁移（保留用户已做的修改，仅补齐新模块/新字段）——
-    db.users.forEach(u => { u.status = u.status || '启用'; u.role = u.role || '超级管理员'; });
-    DEFAULT_DB.users.forEach(u => {
-      if (!db.users.some(x => x.username === u.username)) db.users.push(JSON.parse(JSON.stringify(u)));
-    });
-    if (!db.news)      db.news      = JSON.parse(JSON.stringify(DEFAULT_DB.news));
-    if (!db.resources) db.resources = JSON.parse(JSON.stringify(DEFAULT_DB.resources));
-    db.meta = { version: DB_VERSION };
-    localStorage.setItem(DB_KEY, JSON.stringify(db));
-  }
-  window.DB = db;
-  return db;
+/* ---------- 数据缓存（后端为唯一数据源） ----------
+ * 页面 boot 时并行拉取全量集合（演示数据量级 ≤100 条/集合），
+ * 写操作成功后重新 hydrate，保证本地视图与服务器一致。
+ */
+window.DB = { users: [], teachers: [], courses: [], classes: [], students: [], payments: [], news: [], resources: [], org: {}, settings: {} };
+
+async function hydrate() {
+  const user = getSessionUser();
+  const [teachers, courses, classes, students, payments, news, resources, conf, users] = await Promise.all([
+    api.list('teachers'), api.list('courses'), api.list('classes'),
+    api.list('students'), api.list('payments'), api.list('news'), api.list('resources'),
+    api.settingsGet(),
+    // 用户列表仅管理员可见，普通角色跳过以免 403
+    isAdmin(user) ? api.list('users') : Promise.resolve({ list: [] }),
+  ]);
+  DB.teachers = teachers.list;  DB.courses = courses.list;  DB.classes = classes.list;
+  DB.students = students.list;  DB.payments = payments.list; DB.news = news.list;
+  DB.resources = resources.list; DB.users = users.list;
+  DB.org = conf.org; DB.settings = conf.settings;
 }
-function saveDB() { localStorage.setItem(DB_KEY, JSON.stringify(window.DB)); }
-function resetDB() { localStorage.removeItem(DB_KEY); }
+
+/**
+ * 页面启动入口：同步渲染布局（含会话校验）→ 拉取业务数据 → 返回当前用户。
+ * 会话无效时自动跳转登录页并返回 null。
+ * @param {string} pageKey 当前页面标识（见 PAGE_TITLES）
+ * @param {boolean} [needData=true] 是否拉取业务集合（工作台等纯接口页可传 false）
+ */
+async function boot(pageKey, needData = true) {
+  const user = renderLayout(pageKey);
+  if (!user) return null;
+  if (needData) {
+    try {
+      await hydrate();
+    } catch (e) {
+      showToast('数据加载失败：' + e.message, 'error');
+    }
+  }
+  return user;
+}
 
 /* ---------- 关联查询 ---------- */
 const byId = (list, id) => list.find(x => x.id === id);
@@ -157,20 +166,14 @@ const PAGE_TITLES = {
 };
 function isAdmin(user) { return !!user && user.role === '超级管理员'; }
 
-/* ---------- 会话 ---------- */
-function getSessionUser() {
-  const username = sessionStorage.getItem(SESSION_KEY);
-  if (!username) return null;
-  return DB.users.find(u => u.username === username) || DB.users[0] || null;
-}
+/* ---------- 会话（token 存取见 api.js） ---------- */
 function doLogout() {
-  sessionStorage.removeItem(SESSION_KEY);
+  clearSession();
   location.href = 'login.html';
 }
 
 /* ---------- 布局渲染（侧边栏 + 顶栏） ---------- */
 function renderLayout(pageKey) {
-  loadDB();
   const user = getSessionUser();
   if (!user) { location.href = 'login.html'; return null; }
 
@@ -193,7 +196,7 @@ function renderLayout(pageKey) {
         `).join('')}`;
       }).join('')}
     </nav>
-    <div class="sidebar-foot">启航编程管理系统 v0.2<br>第一阶段 · 静态演示版</div>`;
+    <div class="sidebar-foot">启航编程管理系统 v0.3<br>演示版 · 前后端联调</div>`;
 
   $('#topbar').innerHTML = `
     <button class="icon-btn hamburger" id="btn-menu" title="菜单">${ICONS.menu}</button>

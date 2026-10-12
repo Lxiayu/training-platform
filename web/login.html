@@ -20,7 +20,7 @@
         <b>演示账号</b>（不同角色权限不同）<br>
         超级管理员：<b>admin</b> / <b>admin123</b><br>
         教务管理员：<b>jiaowu</b> · 财务专员：<b>caiwu</b> · 前台：<b>qiantai</b>（密码均为 <b>123456</b>）<br>
-        本版本为第一阶段静态演示版，数据保存在浏览器本地。
+        本版本为前后端联调演示版，数据由 FastAPI 服务提供，可一键重置。
       </div>
 
       <form class="login-form" id="login-form" autocomplete="off">
@@ -41,27 +41,33 @@
         <button class="btn btn-block" type="submit" style="padding:11px;">登 录</button>
       </form>
 
-      <p class="login-copyright">© 2026 启航编程教育 · 第一阶段静态演示版</p>
+      <p class="login-copyright">© 2026 启航编程教育 · 演示版 v0.3</p>
     </div>
   </div>
 
-  <script src="js/data.js"></script>
+  <script src="js/api.js"></script>
   <script src="js/common.js"></script>
   <script>
-    // 已登录则直接进入系统
-    loadDB();
-    if (sessionStorage.getItem(SESSION_KEY)) location.replace('dashboard.html');
+    // 已登录（token 仍有效）则直接进入系统
+    if (getToken()) location.replace('dashboard.html');
 
-    document.getElementById('login-form').addEventListener('submit', function (e) {
+    document.getElementById('login-form').addEventListener('submit', async function (e) {
       e.preventDefault();
       const u = document.getElementById('username').value.trim();
       const p = document.getElementById('password').value;
-      const user = DB.users.find(x => x.username === u && x.password === p);
-      if (!user) { showToast('账号或密码错误，请重试', 'error'); return; }
-      if (user.status === '禁用') { showToast('该账号已被禁用，请联系超级管理员', 'error'); return; }
-      sessionStorage.setItem(SESSION_KEY, user.username);
-      showToast('登录成功，正在进入系统…');
-      setTimeout(() => location.href = 'dashboard.html', 600);
+      const remember = document.querySelector('.login-row input[type=checkbox]').checked;
+      const btn = this.querySelector('button[type=submit]');
+      if (!u || !p) { showToast('请输入账号和密码', 'error'); return; }
+      btn.disabled = true;
+      try {
+        const data = await api.login(u, p);
+        saveSession(data.token, data.user, remember);
+        showToast('登录成功，正在进入系统…');
+        setTimeout(() => location.href = 'dashboard.html', 600);
+      } catch (err) {
+        showToast(err.message, 'error');
+        btn.disabled = false;
+      }
     });
   </script>
 </body>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-blob" style="width:360px;height:360px;background:#8b5cf6;top:-80px;left:-80px;"></div>
+    <div class="login-blob" style="width:420px;height:420px;background:#0ea5e9;bottom:-120px;right:-100px;"></div>
+
+    <div class="login-card">
+      <div class="login-logo">启</div>
+      <h1 class="login-title">启航编程管理系统</h1>
+      <p class="login-sub">Qihang Coding Education · 培训机构一站式管理平台</p>
+
+      <div class="login-tip">
+        <b>演示账号</b>（不同角色权限不同）<br>
+        超级管理员：<b>admin</b> / <b>admin123</b><br>
+        教务管理员：<b>jiaowu</b> · 财务专员：<b>caiwu</b> · 前台：<b>qiantai</b>（密码均为 <b>123456</b>）<br>
+        本版本为第一阶段静态演示版，数据保存在浏览器本地。
+      </div>
+
+      <form class="login-form" id="login-form" autocomplete="off">
+        <div class="form-item">
+          <label>账号</label>
+          <input class="input" id="username" placeholder="请输入账号" value="admin">
+        </div>
+        <div class="form-item">
+          <label>密码</label>
+          <input class="input" type="password" id="password" placeholder="请输入密码" value="admin123">
+        </div>
+        <div class="login-row">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" checked> 记住我
+          </label>
+          <a href="javascript:;">忘记密码？</a>
+        </div>
+        <button class="btn btn-block" type="submit" style="padding:11px;">登 录</button>
+      </form>
+
+      <p class="login-copyright">© 2026 启航编程教育 · 第一阶段静态演示版</p>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script>
+    // 已登录则直接进入系统
+    loadDB();
+    if (sessionStorage.getItem(SESSION_KEY)) location.replace('dashboard.html');
+
+    document.getElementById('login-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value;
+      const user = DB.users.find(x => x.username === u && x.password === p);
+      if (!user) { showToast('账号或密码错误，请重试', 'error'); return; }
+      if (user.status === '禁用') { showToast('该账号已被禁用，请联系超级管理员', 'error'); return; }
+      sessionStorage.setItem(SESSION_KEY, user.username);
+      showToast('登录成功，正在进入系统…');
+      setTimeout(() => location.href = 'dashboard.html', 600);
+    });
+  </script>
+</body>
+</html>

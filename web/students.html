@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学生管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索姓名 / 学号 / 家长电话">
+            </div>
+            <select class="select" id="f-class"></select>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>在读</option><option>休学</option><option>已结课</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>新增学员</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>学员</th><th>性别</th><th>年级</th><th>家长</th>
+                  <th>家长电话</th><th>所在班级</th><th>课程</th><th>报名日期</th><th>状态</th><th style="width:150px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 名学员</span>
+            <span>演示数据 · 修改保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新增 / 编辑学员模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">新增学员</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item">
+            <label>学员姓名<span class="req">*</span></label>
+            <input class="input" id="f-name" placeholder="请输入学员姓名">
+          </div>
+          <div class="form-item">
+            <label>性别</label>
+            <select class="select" id="f-gender"><option>女</option><option>男</option></select>
+          </div>
+          <div class="form-item">
+            <label>在读年级<span class="req">*</span></label>
+            <select class="select" id="f-grade">
+              <option>一年级</option><option>二年级</option><option>三年级</option><option>四年级</option>
+              <option>五年级</option><option>六年级</option><option>初一</option><option>初二</option>
+              <option>初三</option><option>高一</option><option>高二</option><option>高三</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>家长姓名<span class="req">*</span></label>
+            <input class="input" id="f-parent" placeholder="请输入家长姓名">
+          </div>
+          <div class="form-item">
+            <label>家长电话<span class="req">*</span></label>
+            <input class="input" id="f-parent-phone" placeholder="请输入 11 位手机号" maxlength="11">
+          </div>
+          <div class="form-item">
+            <label>所属班级<span class="req">*</span></label>
+            <select class="select" id="f-class-edit"></select>
+          </div>
+          <div class="form-item">
+            <label>报名日期<span class="req">*</span></label>
+            <input class="input" id="f-enrolldate" type="date">
+          </div>
+          <div class="form-item">
+            <label>学员状态</label>
+            <select class="select" id="f-status-edit">
+              <option>在读</option><option>休学</option><option>已结课</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/students.js"></script>
+</body>
+</html>

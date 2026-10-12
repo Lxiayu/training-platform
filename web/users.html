@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索姓名 / 账号 / 手机号">
+            </div>
+            <select class="select" id="f-role">
+              <option value="">全部角色</option>
+              <option>超级管理员</option><option>教务管理员</option><option>财务专员</option>
+              <option>前台接待</option><option>教师</option>
+            </select>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>启用</option><option>禁用</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>新增用户</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>用户</th><th>角色</th><th>手机号</th><th>邮箱</th>
+                  <th>加入时间</th><th>状态</th><th style="width:250px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 个账号</span>
+            <span>本模块仅超级管理员可见 · 演示数据保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新增 / 编辑用户模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">新增用户</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item">
+            <label>登录账号<span class="req">*</span></label>
+            <input class="input" id="f-username" placeholder="用于登录，创建后不可修改">
+          </div>
+          <div class="form-item">
+            <label>姓名<span class="req">*</span></label>
+            <input class="input" id="f-name" placeholder="请输入姓名">
+          </div>
+          <div class="form-item">
+            <label id="pwd-label">初始密码<span class="req">*</span></label>
+            <input class="input" id="f-pwd" type="password" placeholder="请输入初始密码（至少 6 位）">
+          </div>
+          <div class="form-item">
+            <label>角色<span class="req">*</span></label>
+            <select class="select" id="f-role-edit">
+              <option>超级管理员</option><option>教务管理员</option><option>财务专员</option>
+              <option>前台接待</option><option>教师</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>手机号<span class="req">*</span></label>
+            <input class="input" id="f-phone" placeholder="请输入手机号" maxlength="11">
+          </div>
+          <div class="form-item">
+            <label>邮箱</label>
+            <input class="input" id="f-email" placeholder="name@qihangcode.cn">
+          </div>
+          <div class="form-item">
+            <label>加入日期<span class="req">*</span></label>
+            <input class="input" id="f-joindate" type="date">
+          </div>
+          <div class="form-item">
+            <label>账号状态</label>
+            <select class="select" id="f-status-edit"><option>启用</option><option>禁用</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/users.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>课件资源 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card" style="margin-bottom:18px;">
+          <div class="toolbar" style="border-bottom:none;">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索资源名称">
+            </div>
+            <select class="select" id="f-type">
+              <option value="">全部类型</option>
+              <option>课件PPT</option><option>教学视频</option>
+              <option>习题册</option><option>素材包</option>
+            </select>
+            <select class="select" id="f-course">
+              <option value="">全部课程</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>上传资源</button>
+          </div>
+        </div>
+
+        <div class="res-grid" id="res-grid"></div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 上传 / 编辑资源模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">上传资源</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item full">
+            <label>资源名称<span class="req">*</span></label>
+            <input class="input" id="f-title" placeholder="例如：第5讲 循环结构（含课堂练习）" maxlength="50">
+          </div>
+          <div class="form-item">
+            <label>资源类型<span class="req">*</span></label>
+            <select class="select" id="f-type-edit">
+              <option>课件PPT</option><option>教学视频</option>
+              <option>习题册</option><option>素材包</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>所属课程<span class="req">*</span></label>
+            <select class="select" id="f-course-edit"></select>
+          </div>
+          <div class="form-item">
+            <label>上传教师<span class="req">*</span></label>
+            <select class="select" id="f-teacher-edit"></select>
+          </div>
+          <div class="form-item">
+            <label>上传日期<span class="req">*</span></label>
+            <input class="input" id="f-date" type="date">
+          </div>
+          <div class="form-item">
+            <label>文件大小<span class="req">*</span></label>
+            <input class="input" id="f-size" placeholder="例如：8.2 MB">
+          </div>
+          <div class="form-item">
+            <label>时长（仅视频）</label>
+            <input class="input" id="f-duration" placeholder="例如：42 分钟">
+          </div>
+          <div class="form-item">
+            <label>发布状态</label>
+            <select class="select" id="f-status-edit"><option>已发布</option><option>草稿</option></select>
+          </div>
+          <div class="form-item full">
+            <span class="form-hint">演示版暂无真实文件上传，保存后将以卡片形式展示在资源库中。</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/resources.js"></script>
+</body>
+</html>

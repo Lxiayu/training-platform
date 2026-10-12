@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>工作台 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+
+        <!-- 欢迎横幅 -->
+        <div class="welcome-bar">
+          <div>
+            <div class="welcome-title" id="welcome-title">欢迎回来</div>
+            <div class="welcome-sub" id="welcome-sub"></div>
+          </div>
+          <div class="welcome-actions">
+            <a class="btn btn-light" href="students.html"><span data-icon="userplus"></span>新增学员</a>
+            <a class="btn btn-light" href="payments.html"><span data-icon="wallet"></span>登记缴费</a>
+            <a class="btn btn-light" href="classes.html"><span data-icon="calendar"></span>班级排课</a>
+          </div>
+        </div>
+
+        <!-- 统计卡片 -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-icon primary"><span data-icon="student"></span></div>
+            <div>
+              <div class="stat-value" id="stat-students">0</div>
+              <div class="stat-label">在读学员</div>
+              <div class="stat-extra" id="stat-students-extra"></div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon info"><span data-icon="teacher"></span></div>
+            <div>
+              <div class="stat-value" id="stat-teachers">0</div>
+              <div class="stat-label">在职教师</div>
+              <div class="stat-extra" id="stat-teachers-extra"></div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon warning"><span data-icon="users"></span></div>
+            <div>
+              <div class="stat-value" id="stat-classes">0</div>
+              <div class="stat-label">进行中班级</div>
+              <div class="stat-extra" id="stat-classes-extra"></div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon success"><span data-icon="coin"></span></div>
+            <div>
+              <div class="stat-value" id="stat-income">¥0</div>
+              <div class="stat-label">本月收入（已确认）</div>
+              <div class="stat-extra" id="stat-income-extra"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 图表区 -->
+        <div class="dash-grid">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title"><span data-icon="chart"></span>班级报名热度</div>
+              <a class="card-link" href="classes.html">全部班级<span data-icon="arrow"></span></a>
+            </div>
+            <div class="card-body" id="bar-chart"></div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title"><span data-icon="calendar"></span>近期开班</div>
+              <a class="card-link" href="classes.html">排班管理<span data-icon="arrow"></span></a>
+            </div>
+            <div class="card-body" id="upcoming-classes"></div>
+          </div>
+        </div>
+
+        <!-- 最近缴费 -->
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-head">
+            <div class="card-title"><span data-icon="wallet"></span>最近缴费记录</div>
+            <a class="card-link" href="payments.html">缴费管理<span data-icon="arrow"></span></a>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>流水号</th><th>学员</th><th>班级 / 课程</th><th>金额</th>
+                  <th>缴费方式</th><th>缴费日期</th><th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="recent-payments"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 快捷入口 -->
+        <div class="card">
+          <div class="card-head"><div class="card-title"><span data-icon="dashboard"></span>快捷入口</div></div>
+          <div class="card-body">
+            <div class="quick-grid" id="quick-grid"></div>
+          </div>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>

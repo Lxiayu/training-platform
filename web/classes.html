@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>班级管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索班级名称 / 编号 / 教室">
+            </div>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>未开班</option><option>进行中</option><option>已结课</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>新增班级</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>班级编号</th><th>班级名称</th><th>所属课程</th><th>授课教师</th>
+                  <th>教室</th><th>上课时间</th><th>班容 / 报名</th><th>起止日期</th><th>状态</th><th style="width:150px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 个班级</span>
+            <span>演示数据 · 修改保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新增 / 编辑班级模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">新增班级</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item full">
+            <label>班级名称<span class="req">*</span></label>
+            <input class="input" id="f-name" placeholder="如：Python 入门 · 周日班">
+          </div>
+          <div class="form-item">
+            <label>所属课程<span class="req">*</span></label>
+            <select class="select" id="f-course"></select>
+          </div>
+          <div class="form-item">
+            <label>授课教师<span class="req">*</span></label>
+            <select class="select" id="f-teacher"></select>
+          </div>
+          <div class="form-item">
+            <label>教室</label>
+            <select class="select" id="f-classroom">
+              <option>A101</option><option>A102</option><option>B203</option><option>C305</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>班容上限<span class="req">*</span></label>
+            <input class="input" id="f-capacity" type="number" min="1" placeholder="如：20">
+          </div>
+          <div class="form-item full">
+            <label>上课时间<span class="req">*</span></label>
+            <input class="input" id="f-schedule" placeholder="如：周六 09:00-12:00">
+          </div>
+          <div class="form-item">
+            <label>开班日期<span class="req">*</span></label>
+            <input class="input" id="f-startdate" type="date">
+          </div>
+          <div class="form-item">
+            <label>结课日期</label>
+            <input class="input" id="f-enddate" type="date">
+          </div>
+          <div class="form-item full">
+            <label>班级状态</label>
+            <select class="select" id="f-status-edit">
+              <option>未开班</option><option>进行中</option><option>已结课</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/classes.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>教师管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索姓名 / 工号 / 电话">
+            </div>
+            <select class="select" id="f-subject">
+              <option value="">全部科目</option>
+              <option>Scratch</option><option>Python</option><option>C++</option>
+              <option>人工智能</option><option>Web</option><option>机器人</option><option>Java</option>
+            </select>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>在职</option><option>离职</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>新增教师</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>教师</th><th>性别</th><th>联系电话</th><th>邮箱</th>
+                  <th>主教科目</th><th>职称</th><th>入职日期</th><th>状态</th><th style="width:150px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 名教师</span>
+            <span>演示数据 · 修改保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新增 / 编辑教师模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">新增教师</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item">
+            <label>姓名<span class="req">*</span></label>
+            <input class="input" id="f-name" placeholder="请输入教师姓名">
+          </div>
+          <div class="form-item">
+            <label>性别</label>
+            <select class="select" id="f-gender"><option>女</option><option>男</option></select>
+          </div>
+          <div class="form-item">
+            <label>联系电话<span class="req">*</span></label>
+            <input class="input" id="f-phone" placeholder="请输入手机号" maxlength="11">
+          </div>
+          <div class="form-item">
+            <label>邮箱</label>
+            <input class="input" id="f-email" placeholder="name@qihangcode.cn">
+          </div>
+          <div class="form-item">
+            <label>主教科目<span class="req">*</span></label>
+            <select class="select" id="f-subject-edit">
+              <option>Scratch</option><option>Python</option><option>C++</option>
+              <option>人工智能</option><option>Web</option><option>机器人</option><option>Java</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>职称</label>
+            <select class="select" id="f-title">
+              <option>助教</option><option>讲师</option><option>高级讲师</option><option>金牌竞赛教练</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>入职日期<span class="req">*</span></label>
+            <input class="input" id="f-hiredate" type="date">
+          </div>
+          <div class="form-item">
+            <label>在职状态</label>
+            <select class="select" id="f-status-edit"><option>在职</option><option>离职</option></select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/teachers.js"></script>
+</body>
+</html>

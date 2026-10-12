@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>缴费管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+
+        <!-- 缴费统计 -->
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px;">
+          <div class="stat-card">
+            <div class="stat-icon success"><span data-icon="coin"></span></div>
+            <div>
+              <div class="stat-value" id="stat-month">¥0</div>
+              <div class="stat-label">本月收入（已确认）</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon warning"><span data-icon="clock"></span></div>
+            <div>
+              <div class="stat-value" id="stat-pending">0 笔</div>
+              <div class="stat-label">待确认缴费</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon primary"><span data-icon="chart"></span></div>
+            <div>
+              <div class="stat-value" id="stat-total">¥0</div>
+              <div class="stat-label">累计收入（已确认）</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索学员姓名 / 流水号">
+            </div>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>已支付</option><option>待确认</option><option>已退款</option><option>已作废</option>
+            </select>
+            <select class="select" id="f-method">
+              <option value="">全部方式</option>
+              <option>现金</option><option>微信</option><option>支付宝</option><option>银行转账</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>登记缴费</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>流水号</th><th>学员</th><th>班级 / 课程</th><th>金额</th>
+                  <th>方式</th><th>缴费日期</th><th>备注</th><th>状态</th><th style="width:210px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 条缴费记录</span>
+            <span>演示数据 · 修改保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 登记 / 编辑缴费模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">登记缴费</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item">
+            <label>缴费学员<span class="req">*</span></label>
+            <select class="select" id="f-student"></select>
+          </div>
+          <div class="form-item">
+            <label>缴费班级<span class="req">*</span></label>
+            <select class="select" id="f-class"></select>
+          </div>
+          <div class="form-item">
+            <label>金额（元）<span class="req">*</span></label>
+            <input class="input" id="f-amount" type="number" min="0" placeholder="选择班级后自动带出，可修改">
+          </div>
+          <div class="form-item">
+            <label>缴费方式<span class="req">*</span></label>
+            <select class="select" id="f-method-edit">
+              <option>微信</option><option>支付宝</option><option>现金</option><option>银行转账</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>缴费日期<span class="req">*</span></label>
+            <input class="input" id="f-date" type="date">
+          </div>
+          <div class="form-item">
+            <label>状态</label>
+            <select class="select" id="f-status-edit">
+              <option>已支付</option><option>待确认</option><option>已退款</option><option>已作废</option>
+            </select>
+          </div>
+          <div class="form-item full">
+            <label>备注</label>
+            <input class="input" id="f-note" placeholder="如：秋季班学费 / 教材费 / 分期第一期">
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/payments.js"></script>
+</body>
+</html>

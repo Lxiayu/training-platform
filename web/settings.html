@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统设置 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div style="max-width:860px;">
+
+          <!-- 机构信息 -->
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title"><span data-icon="building"></span>机构信息</div>
+            </div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="form-item">
+                  <label>机构名称<span class="req">*</span></label>
+                  <input class="input" id="s-name" placeholder="请输入机构名称">
+                </div>
+                <div class="form-item">
+                  <label>联系电话<span class="req">*</span></label>
+                  <input class="input" id="s-phone" placeholder="如：0571-88886666">
+                </div>
+                <div class="form-item full">
+                  <label>机构地址</label>
+                  <input class="input" id="s-address" placeholder="省市区 + 详细地址">
+                </div>
+                <div class="form-item full">
+                  <label>机构简介</label>
+                  <textarea class="input" id="s-intro" placeholder="一句话介绍机构定位与业务"></textarea>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+                <button class="btn" id="btn-save-org">保存设置</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 业务开关 -->
+          <div class="card section-gap">
+            <div class="card-head">
+              <div class="card-title"><span data-icon="gear"></span>业务开关</div>
+            </div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-name">允许学员自助请假</div>
+                  <div class="setting-desc">开启后，家长可在小程序端直接提交请假申请</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="sw-leave"><span class="switch-slider"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-name">上课自动提醒</div>
+                  <div class="setting-desc">上课前 2 小时向家长推送课表提醒消息</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="sw-remind"><span class="switch-slider"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-name">缴费收据自动打印</div>
+                  <div class="setting-desc">登记缴费确认到账后自动连接前台打印机打印收据</div>
+                </div>
+                <label class="switch"><input type="checkbox" id="sw-receipt"><span class="switch-slider"></span></label>
+              </div>
+              <div class="setting-row">
+                <div class="setting-info">
+                  <div class="setting-name">新学员默认状态</div>
+                  <div class="setting-desc">新增学员报名后默认进入的学籍状态</div>
+                </div>
+                <select class="select" id="s-newstatus" style="width:130px;">
+                  <option>在读</option><option>休学</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 演示数据管理 -->
+          <div class="danger-zone section-gap">
+            <h4>演示数据管理</h4>
+            <p>
+              当前为第一阶段静态演示版：所有数据（课程 / 班级 / 教师 / 学员 / 缴费）保存在浏览器 localStorage 中，
+              增删改操作在刷新后仍然保留。如需恢复到初始演示数据，请点击下方按钮。
+            </p>
+            <button class="btn btn-danger" id="btn-reset"><span data-icon="refresh"></span>重置演示数据</button>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

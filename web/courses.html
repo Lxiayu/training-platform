@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>课程管理 - 启航编程管理系统</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" id="sidebar"></aside>
+    <div class="main">
+      <header class="topbar" id="topbar"></header>
+      <main class="content">
+        <div class="card">
+          <div class="toolbar">
+            <div class="search-box">
+              <span data-icon="search"></span>
+              <input class="input" id="kw" placeholder="搜索课程名称 / 编号">
+            </div>
+            <select class="select" id="f-category">
+              <option value="">全部分类</option>
+              <option>Scratch</option><option>Python</option><option>C++</option>
+              <option>人工智能</option><option>Web</option><option>机器人</option><option>Java</option>
+            </select>
+            <select class="select" id="f-status">
+              <option value="">全部状态</option>
+              <option>在售</option><option>停售</option>
+            </select>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-add"><span data-icon="plus"></span>新增课程</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>课程编号</th><th>课程名称</th><th>分类</th><th>级别</th>
+                  <th>课时</th><th>学费</th><th>状态</th><th style="width:200px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="tbody"></tbody>
+            </table>
+          </div>
+          <div class="table-foot">
+            <span>共 <b id="count" style="color:var(--text)">0</b> 门课程</span>
+            <span>演示数据 · 修改保存在浏览器本地</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 新增 / 编辑课程模态框 -->
+  <div class="modal" id="editor-modal">
+    <div class="modal-mask"></div>
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="modal-title">新增课程</h3>
+        <button class="modal-x" data-close><span data-icon="x"></span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-item full">
+            <label>课程名称<span class="req">*</span></label>
+            <input class="input" id="f-name" placeholder="如：Python 零基础入门">
+          </div>
+          <div class="form-item">
+            <label>课程分类<span class="req">*</span></label>
+            <select class="select" id="f-cat">
+              <option>Scratch</option><option>Python</option><option>C++</option>
+              <option>人工智能</option><option>Web</option><option>机器人</option><option>Java</option><option>其他</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>课程级别</label>
+            <select class="select" id="f-level">
+              <option>启蒙</option><option>入门</option><option>进阶</option><option>竞赛</option>
+            </select>
+          </div>
+          <div class="form-item">
+            <label>课时数<span class="req">*</span></label>
+            <input class="input" id="f-hours" type="number" min="1" placeholder="如：48">
+          </div>
+          <div class="form-item">
+            <label>学费（元）<span class="req">*</span></label>
+            <input class="input" id="f-price" type="number" min="0" placeholder="如：3600">
+          </div>
+          <div class="form-item full">
+            <label>适学对象</label>
+            <input class="input" id="f-target" placeholder="如：10-15 岁，零基础">
+          </div>
+          <div class="form-item full">
+            <label>上架状态</label>
+            <select class="select" id="f-status-edit">
+              <option>在售</option><option>停售</option>
+            </select>
+          </div>
+          <div class="form-item full">
+            <label>课程简介</label>
+            <textarea class="input" id="f-desc" placeholder="简要介绍课程内容与教学目标"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" data-close>取 消</button>
+        <button class="btn" id="btn-submit">保 存</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/common.js"></script>
+  <script src="js/courses.js"></script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+"""Pydantic 请求模型：字段经 to_camel 别名与前端 camelCase 完全对齐。
+
+- 前端可直接提交 camelCase 字段（如 parentPhone、joinDate）；
+- 亦兼容 snake_case（populate_by_name）；
+- extra="ignore"：忽略未声明字段，避免原型前端多传字段报错。
+"""
+from pydantic import BaseModel, ConfigDict, Field
+from pydantic.alias_generators import to_camel
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+        str_strip_whitespace=True,
+    )
+
+
+# ---------- 认证 ----------
+
+class LoginRequest(CamelModel):
+    username: str
+    password: str
+
+
+class ChangePasswordRequest(CamelModel):
+    old_password: str
+    new_password: str = Field(min_length=6, max_length=32)
+
+
+# ---------- 用户 ----------
+
+class UserCreate(CamelModel):
+    username: str = Field(min_length=2, max_length=32, pattern=r"^[A-Za-z0-9_]+$")
+    name: str = Field(min_length=1, max_length=32)
+    role: str = "教务管理员"
+    phone: str = Field(min_length=5, max_length=20)
+    email: str | None = None
+    join_date: str | None = None
+    status: str = "启用"
+    password: str | None = Field(default=None, min_length=6, max_length=32)
+
+
+class UserUpdate(CamelModel):
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    role: str | None = None
+    phone: str | None = Field(default=None, min_length=5, max_length=20)
+    email: str | None = None
+    status: str | None = None
+
+
+# ---------- 教师 ----------
+
+class TeacherCreate(CamelModel):
+    name: str = Field(min_length=1, max_length=32)
+    gender: str = "男"
+    phone: str = Field(min_length=5, max_length=20)
+    email: str | None = None
+    subject: str
+    title: str | None = None
+    hire_date: str | None = None
+    status: str = "在职"
+
+
+class TeacherUpdate(CamelModel):
+    name: str | None = None
+    gender: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    subject: str | None = None
+    title: str | None = None
+    hire_date: str | None = None
+    status: str | None = None
+
+
+# ---------- 课程 ----------
+
+class CourseCreate(CamelModel):
+    name: str = Field(min_length=1, max_length=64)
+    category: str
+    level: str
+    hours: int = Field(gt=0, le=999)
+    price: float = Field(ge=0)
+    target: str | None = None
+    desc: str | None = None
+    status: str = "在售"
+
+
+class CourseUpdate(CamelModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    category: str | None = None
+    level: str | None = None
+    hours: int | None = Field(default=None, gt=0, le=999)
+    price: float | None = Field(default=None, ge=0)
+    target: str | None = None
+    desc: str | None = None
+    status: str | None = None
+
+
+# ---------- 班级 ----------
+
+class ClassCreate(CamelModel):
+    name: str = Field(min_length=1, max_length=64)
+    course_id: str
+    teacher_id: str
+    classroom: str | None = None
+    schedule: str | None = None
+    capacity: int = Field(gt=0, le=999)
+    start_date: str | None = None
+    end_date: str | None = None
+    status: str = "未开班"
+
+
+class ClassUpdate(CamelModel):
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    course_id: str | None = None
+    teacher_id: str | None = None
+    classroom: str | None = None
+    schedule: str | None = None
+    capacity: int | None = Field(default=None, gt=0, le=999)
+    start_date: str | None = None
+    end_date: str | None = None
+    status: str | None = None
+
+
+# ---------- 学员 ----------
+
+class StudentCreate(CamelModel):
+    name: str = Field(min_length=1, max_length=32)
+    gender: str = "男"
+    grade: str
+    parent: str = Field(min_length=1, max_length=32)
+    parent_phone: str = Field(min_length=5, max_length=20)
+    class_id: str
+    enroll_date: str | None = None
+    status: str | None = None
+
+
+class StudentUpdate(CamelModel):
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    gender: str | None = None
+    grade: str | None = None
+    parent: str | None = Field(default=None, min_length=1, max_length=32)
+    parent_phone: str | None = Field(default=None, min_length=5, max_length=20)
+    class_id: str | None = None
+    enroll_date: str | None = None
+    status: str | None = None
+
+
+# ---------- 缴费 ----------
+
+class PaymentCreate(CamelModel):
+    student_id: str
+    class_id: str
+    amount: float = Field(gt=0)
+    method: str
+    date: str | None = None
+    status: str = "待确认"
+    note: str | None = None
+
+
+class PaymentUpdate(CamelModel):
+    amount: float | None = Field(default=None, gt=0)
+    method: str | None = None
+    date: str | None = None
+    note: str | None = None
+
+
+# ---------- 新闻 ----------
+
+class NewsCreate(CamelModel):
+    title: str = Field(min_length=1, max_length=120)
+    category: str
+    top: bool = False
+    date: str | None = None
+    author: str | None = None
+    summary: str | None = None
+    content: list[str] = []
+    status: str = "草稿"
+
+
+class NewsUpdate(CamelModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    category: str | None = None
+    top: bool | None = None
+    date: str | None = None
+    author: str | None = None
+    summary: str | None = None
+    content: list[str] | None = None
+    status: str | None = None
+
+
+# ---------- 课件资源 ----------
+
+class ResourceCreate(CamelModel):
+    title: str = Field(min_length=1, max_length=120)
+    type: str
+    course_id: str
+    teacher_id: str
+    size: str | None = None
+    duration: str | None = None
+    date: str | None = None
+    status: str = "已发布"
+
+
+class ResourceUpdate(CamelModel):
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    type: str | None = None
+    course_id: str | None = None
+    teacher_id: str | None = None
+    size: str | None = None
+    duration: str | None = None
+    date: str | None = None
+    status: str | None = None
+
+
+# ---------- 系统设置 ----------
+
+class SettingsUpdate(CamelModel):
+    """机构信息（org）与业务设置（settings）合并提交。"""
+    name: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    intro: str | None = None
+    allow_leave: bool | None = None
+    schedule_remind: bool | None = None
+    receipt_print: bool | None = None
+    new_student_status: str | None = None
+

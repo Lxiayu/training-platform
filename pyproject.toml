@@ -1,6 +1,9 @@
 [project]
 name = "training-platform"
-version = "0.1.0"
+version = "0.2.0"
 description = "编程培训管理平台 - 培训机构一站式管理后端服务"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]

@@ -1,0 +1,82 @@
+"""应用入口：uvicorn app.main:app --reload
+
+职责：
+- 注册 /api/v1 全部业务路由（对齐《02-总体设计》§6.2）；
+- 统一响应壳与异常处理（BizException -> HTTP + 中文提示）；
+- CORS 放开（原型联调）；
+- 挂载 web/ 静态前端（登录后浏览器直接访问 /login.html 预览）。
+"""
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.api import api_router
+from app.core.config import WEB_DIR
+from app.core.exceptions import BizException
+
+app = FastAPI(
+    title="启航编程管理系统 API",
+    version="0.1.0",
+    description=(
+        "培训机构一站式管理后端 · 原型阶段（JSON 文件暂存）。\n\n"
+        "统一响应壳：成功 `{code: 0, message, data}`，失败 `{code, message}`。\n\n"
+        "认证方式：`Authorization: Bearer <token>`（POST /api/v1/auth/login 获取）。"
+    ),
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.exception_handler(BizException)
+async def biz_exception_handler(request: Request, exc: BizException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"code": exc.status_code, "message": exc.message},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """参数校验失败 -> 422 + 中文提示（取第一条错误）。"""
+    errors = exc.errors()
+    if errors:
+        first = errors[0]
+        loc = ".".join(str(x) for x in first.get("loc", []) if x != "body")
+        msg = str(first.get("msg", "参数错误"))
+        if "missing" in msg:
+            msg = "缺少必填字段"
+        elif "greater than" in msg or "less than" in msg:
+            msg = "数值超出允许范围"
+        elif "min_length" in msg or "String should have at least" in msg:
+            msg = "长度不满足要求"
+        elif "not match" in msg or "pattern" in msg:
+            msg = "格式不正确"
+        message = f"参数校验失败（{loc}）：{msg}" if loc else f"参数校验失败：{msg}"
+    else:
+        message = "参数校验失败"
+    return JSONResponse(status_code=422, content={"code": 422, "message": message})
+
+
+@app.get("/api/v1/health")
+def health():
+    return {"code": 0, "message": "ok", "data": {"status": "up"}}
+
+
+@app.get("/")
+def index():
+    return RedirectResponse(url="/login.html")
+
+
+# 业务路由（先注册，优先于静态挂载）
+app.include_router(api_router)
+
+# 前端静态托管（原型一体化预览；data/app.json 为运行时数据，不入库）
+app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")

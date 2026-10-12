@@ -1,0 +1,107 @@
+"""课程 / 班级 / 学员 业务规则（含级联删除）。"""
+from typing import Any
+
+from app.core.exceptions import BizException
+from app.db.jsondb import db, now_iso
+from app.services.base import CrudService, today
+
+
+class CourseService(CrudService):
+    coll = "courses"
+    prefix = "KC"
+    label = "课程"
+    search_fields = ("name", "category", "level", "target")
+
+    def list(self, *, category: str | None = None, level: str | None = None, **kwargs) -> dict:
+        return super().list(extra_filters={"category": category, "level": level}, **kwargs)
+
+    def _before_delete(self, code: str) -> None:
+        used = [c for c in db.alive("classes") if c.get("courseId") == code]
+        if used:
+            raise BizException(409, f"该课程下仍有 {len(used)} 个班级，无法删除")
+        # 扩展预留：课件资源引用保护（《01-数据库设计》规划，原型暂不拦截）
+
+
+class ClassService(CrudService):
+    coll = "classes"
+    prefix = "BJ"
+    label = "班级"
+    search_fields = ("name", "classroom", "schedule")
+
+    def list(self, *, course_id: str | None = None, teacher_id: str | None = None, **kwargs) -> dict:
+        return super().list(extra_filters={"courseId": course_id, "teacherId": teacher_id}, **kwargs)
+
+    def decorate(self, row: dict) -> dict:
+        enrolled = sum(1 for s in db.alive("students") if s.get("classId") == row.get("id"))
+        course = db.find("courses", row.get("courseId") or "")
+        teacher = db.find("teachers", row.get("teacherId") or "")
+        return {
+            **row,
+            "enrolled": enrolled,
+            "isFull": enrolled >= int(row.get("capacity") or 0),
+            "courseName": course["name"] if course else "",
+            "teacherName": teacher["name"] if teacher else "",
+        }
+
+    def create(self, data: dict[str, Any]) -> dict:
+        course = db.locate("courses", data.get("courseId") or "", label="课程")
+        if course.get("status") != "在售":
+            raise BizException(409, f"课程「{course['name']}」已停售，无法开班")
+        teacher = db.locate("teachers", data.get("teacherId") or "", label="教师")
+        if teacher.get("status") != "在职":
+            raise BizException(409, f"教师「{teacher['name']}」已离职，无法排课")
+        data = {**data}
+        data.setdefault("startDate", None)
+        if not data.get("startDate"):
+            data["startDate"] = today()
+        return super().create(data)
+
+    def update(self, code: str, data: dict[str, Any]) -> dict:
+        if data.get("courseId"):
+            course = db.locate("courses", data["courseId"], label="课程")
+            if course.get("status") != "在售":
+                raise BizException(409, f"课程「{course['name']}」已停售，无法切换")
+        if data.get("teacherId"):
+            teacher = db.locate("teachers", data["teacherId"], label="教师")
+            if teacher.get("status") != "在职":
+                raise BizException(409, f"教师「{teacher['name']}」已离职，无法任教")
+        return super().update(code, data)
+
+    def _before_delete(self, code: str) -> None:
+        students = [s for s in db.alive("students") if s.get("classId") == code]
+        if students:
+            raise BizException(409, f"该班级仍有 {len(students)} 名学员，请先转移或移除学员")
+
+
+class StudentService(CrudService):
+    coll = "students"
+    prefix = "XS"
+    label = "学员"
+    search_fields = ("name", "parent", "parentPhone", "grade")
+
+    def list(self, *, class_id: str | None = None, **kwargs) -> dict:
+        return super().list(extra_filters={"classId": class_id} if class_id else None, **kwargs)
+
+    def decorate(self, row: dict) -> dict:
+        cls = db.find("classes", row.get("classId") or "")
+        return {**row, "className": cls["name"] if cls else ""}
+
+    def create(self, data: dict[str, Any]) -> dict:
+        cls = db.locate("classes", data.get("classId") or "", label="班级")
+        if cls.get("status") == "已结课":
+            raise BizException(409, f"班级「{cls['name']}」已结课，无法再报名")
+        data = {**data}
+        if not data.get("enrollDate"):
+            data["enrollDate"] = today()
+        if not data.get("status"):
+            data["status"] = db.settings.get("newStudentStatus") or "在读"
+        return super().create(data)
+
+    def delete(self, code: str) -> None:
+        """删除学员并级联软删其全部缴费记录（同一事务，失败整体回滚）。"""
+        with db.transaction() as data:
+            student = db.locate("students", code, label="学员")
+            student["deletedAt"] = now_iso()
+            for p in data["payments"]:
+                if p.get("studentId") == code and not p.get("deletedAt"):
+                    p["deletedAt"] = now_iso()

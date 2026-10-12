@@ -7,49 +7,109 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <div class="login-page">
-    <div class="login-blob" style="width:360px;height:360px;background:#8b5cf6;top:-80px;left:-80px;"></div>
-    <div class="login-blob" style="width:420px;height:420px;background:#0ea5e9;bottom:-120px;right:-100px;"></div>
-
-    <div class="login-card">
-      <div class="login-logo">启</div>
-      <h1 class="login-title">启航编程管理系统</h1>
-      <p class="login-sub">Qihang Coding Education · 培训机构一站式管理平台</p>
-
-      <div class="login-tip">
-        <b>演示账号</b>（不同角色权限不同）<br>
-        超级管理员：<b>admin</b> / <b>admin123</b><br>
-        教务管理员：<b>jiaowu</b> · 财务专员：<b>caiwu</b> · 前台：<b>qiantai</b>（密码均为 <b>123456</b>）<br>
-        本版本为前后端联调演示版，数据由 FastAPI 服务提供，可一键重置。
+  <div class="auth-split">
+    <!-- 左侧品牌叙事 -->
+    <aside class="auth-aside">
+      <div class="auth-brand">
+        <div class="brand-logo">启</div>
+        <div>
+          <div class="brand-name">启航编程</div>
+          <div class="brand-sub">培训管理系统</div>
+        </div>
       </div>
 
-      <form class="login-form" id="login-form" autocomplete="off">
-        <div class="form-item">
-          <label>账号</label>
-          <input class="input" id="username" placeholder="请输入账号" value="admin">
+      <div class="auth-tagline">
+        <h1>让每一堂课，<br>都被认真对待</h1>
+        <p>面向培训机构的一体化运营平台：招生、排课、缴费、家校互通，一个系统全搞定。</p>
+        <div class="auth-features">
+          <div class="auth-feature"><span class="ico">🛠️</span>员工后台：课程 / 班级 / 学员 / 缴费 / 数据看板</div>
+          <div class="auth-feature"><span class="ico">👩‍🏫</span>教师门户：我的班级 / 学员概况 / 教学资料</div>
+          <div class="auth-feature"><span class="ico">🎓</span>学员门户：我的班级 / 课程 / 已缴费用</div>
+          <div class="auth-feature"><span class="ico">👪</span>家长门户：关联学员动态 / 缴费情况</div>
         </div>
-        <div class="form-item">
-          <label>密码</label>
-          <input class="input" type="password" id="password" placeholder="请输入密码" value="admin123">
-        </div>
-        <div class="login-row">
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-            <input type="checkbox" checked> 记住我
-          </label>
-          <a href="javascript:;">忘记密码？</a>
-        </div>
-        <button class="btn btn-block" type="submit" style="padding:11px;">登 录</button>
-      </form>
+      </div>
 
-      <p class="login-copyright">© 2026 启航编程教育 · 演示版 v0.3</p>
-    </div>
+      <div class="auth-foot">© 2026 启航编程教育 · 演示版 v0.4</div>
+    </aside>
+
+    <!-- 右侧登录表单 -->
+    <main class="auth-main">
+      <div class="login-card">
+        <div class="login-logo">启</div>
+        <h1 class="login-title">欢迎登录</h1>
+        <p class="login-sub">Qihang Coding Education · 培训机构一站式管理平台</p>
+
+        <!-- 四类身份门户切换 -->
+        <div class="identity-tabs" id="identity-tabs">
+          <div class="identity-tab active" data-identity="staff"><span class="ico">🛠️</span>员工</div>
+          <div class="identity-tab" data-identity="teacher"><span class="ico">👩‍🏫</span>教师</div>
+          <div class="identity-tab" data-identity="student"><span class="ico">🎓</span>学员</div>
+          <div class="identity-tab" data-identity="parent"><span class="ico">👪</span>家长</div>
+        </div>
+        <p class="identity-desc" id="identity-desc">后台管理：课程 / 班级 / 学员 / 缴费 / 数据看板</p>
+
+        <div class="login-tip">
+          <b>演示账号</b>（不同身份权限与工作台不同）<br>
+          <span id="demo-hint">超级管理员：<b>admin</b> / <b>admin123</b></span><br>
+          本版本为前后端联调演示版，数据由 FastAPI 服务提供，可一键重置。
+        </div>
+
+        <form class="login-form" id="login-form" autocomplete="off">
+          <div class="form-item">
+            <label>账号</label>
+            <input class="input" id="username" placeholder="请输入账号" value="admin">
+          </div>
+          <div class="form-item">
+            <label>密码</label>
+            <input class="input" type="password" id="password" placeholder="请输入密码" value="admin123">
+          </div>
+          <div class="login-row">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <input type="checkbox" checked> 记住我
+            </label>
+            <a href="javascript:;">忘记密码？</a>
+          </div>
+          <button class="btn btn-block" type="submit" style="padding:11px;">登 录</button>
+        </form>
+      </div>
+    </main>
   </div>
 
   <script src="js/api.js"></script>
   <script src="js/common.js"></script>
   <script>
+    // 四类身份 -> 演示账号与说明
+    const IDENTITY_DEMO = {
+      staff:   { user: 'admin',   pass: 'admin123', desc: '后台管理：课程 / 班级 / 学员 / 缴费 / 数据看板' },
+      teacher: { user: 'JS001',   pass: '123456',   desc: '教师门户：我的班级 / 学员概况 / 教学资料' },
+      student: { user: 'XS001',   pass: '123456',   desc: '学员门户：我的班级 / 课程 / 已缴费用' },
+      parent:  { user: 'P001',    pass: '123456',   desc: '家长门户：关联学员动态 / 缴费情况（支持手机号登录 15868710001）' },
+    };
+
     // 已登录（token 仍有效）则直接进入系统
     if (getToken()) location.replace('dashboard.html');
+
+    const tabs = document.querySelectorAll('.identity-tab');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const id = tab.dataset.identity;
+      const demo = IDENTITY_DEMO[id];
+      document.getElementById('identity-desc').textContent = demo.desc;
+      const hint = document.getElementById('demo-hint');
+      if (id === 'parent') {
+        hint.innerHTML = '家长账号：<b>P001</b> / <b>123456</b>（或手机号 <b>15868710001</b>）';
+      } else if (id === 'teacher') {
+        hint.innerHTML = '教师工号：<b>JS001</b> / <b>123456</b>';
+      } else if (id === 'student') {
+        hint.innerHTML = '学员学号：<b>XS001</b> / <b>123456</b>';
+      } else {
+        hint.innerHTML = '超级管理员：<b>admin</b> / <b>admin123</b>（jiaowu / caiwu / qiantai 密码均为 123456）';
+      }
+      // 切换身份时自动填充对应演示账号，便于快速体验
+      document.getElementById('username').value = demo.user;
+      document.getElementById('password').value = demo.pass;
+    }));
 
     document.getElementById('login-form').addEventListener('submit', async function (e) {
       e.preventDefault();
@@ -59,14 +119,18 @@
       const btn = this.querySelector('button[type=submit]');
       if (!u || !p) { showToast('请输入账号和密码', 'error'); return; }
       btn.disabled = true;
+      btn.classList.add('is-loading');
       try {
         const data = await api.login(u, p);
         saveSession(data.token, data.user, remember);
         showToast('登录成功，正在进入系统…');
-        setTimeout(() => location.href = 'dashboard.html', 600);
+        // 按身份分流：员工进管理后台，教师 / 学员 / 家长进专属门户
+        const target = data.user.identity === 'staff' ? 'dashboard.html' : 'portal.html';
+        setTimeout(() => location.href = target, 600);
       } catch (err) {
         showToast(err.message, 'error');
         btn.disabled = false;
+        btn.classList.remove('is-loading');
       }
     });
   </script>

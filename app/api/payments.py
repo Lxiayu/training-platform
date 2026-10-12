@@ -1,7 +1,7 @@
 """缴费管理路由（含统计与状态流转）。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_staff
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import PaymentCreate, PaymentUpdate
@@ -12,7 +12,7 @@ payment_service = PaymentService()
 
 
 @router.get("/stats")
-def payment_stats(_user: dict = Depends(get_current_user)):
+def payment_stats(_user: dict = Depends(require_staff)):
     return ok(payment_service.stats())
 
 
@@ -24,7 +24,7 @@ def list_payments(
     classId: str | None = None,
     method: str | None = None,
     status: str | None = None,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(require_staff),
 ):
     return ok(payment_service.list(
         keyword=keyword, student_id=studentId, class_id=classId, method=method, status=status,
@@ -33,31 +33,31 @@ def list_payments(
 
 
 @router.get("/{code}")
-def get_payment(code: str, _user: dict = Depends(get_current_user)):
+def get_payment(code: str, _user: dict = Depends(require_staff)):
     return ok(payment_service.get(code))
 
 
 @router.post("")
-def create_payment(body: PaymentCreate, _user: dict = Depends(get_current_user)):
+def create_payment(body: PaymentCreate, _user: dict = Depends(require_staff)):
     return ok(payment_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_payment(code: str, body: PaymentUpdate, _user: dict = Depends(get_current_user)):
+def update_payment(code: str, body: PaymentUpdate, _user: dict = Depends(require_staff)):
     return ok(payment_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_payment(code: str, _user: dict = Depends(get_current_user)):
+def delete_payment(code: str, _user: dict = Depends(require_staff)):
     payment_service.delete(code)
     return ok(None, "删除成功")
 
 
 @router.post("/{code}/confirm")
-def confirm_payment(code: str, _user: dict = Depends(get_current_user)):
+def confirm_payment(code: str, _user: dict = Depends(require_staff)):
     return ok(payment_service.confirm(code), "确认收款成功")
 
 
 @router.post("/{code}/void")
-def void_payment(code: str, _user: dict = Depends(get_current_user)):
+def void_payment(code: str, _user: dict = Depends(require_staff)):
     return ok(payment_service.void(code), "作废成功")

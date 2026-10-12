@@ -1,7 +1,7 @@
 """新闻中心路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import NewsCreate, NewsUpdate
@@ -30,17 +30,17 @@ def get_news(code: str, _user: dict = Depends(get_current_user)):
 
 
 @router.post("")
-def create_news(body: NewsCreate, user: dict = Depends(get_current_user)):
+def create_news(body: NewsCreate, user: dict = Depends(require_admin)):
     return ok(news_service.create(body.model_dump(by_alias=True), author=user.get("name")))
 
 
 @router.put("/{code}")
-def update_news(code: str, body: NewsUpdate, _user: dict = Depends(get_current_user)):
+def update_news(code: str, body: NewsUpdate, _user: dict = Depends(require_admin)):
     return ok(news_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_news(code: str, _user: dict = Depends(get_current_user)):
+def delete_news(code: str, _user: dict = Depends(require_admin)):
     news_service.delete(code)
     return ok(None, "删除成功")
 

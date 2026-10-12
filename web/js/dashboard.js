@@ -48,7 +48,7 @@ function renderBarChart(list) {
   $('#bar-chart').innerHTML = list.length ? list.map(c => `
     <div class="bar-row">
       <div class="bar-name" title="${esc(c.name)}">${esc(c.name)}</div>
-      <div class="bar-track"><span class="bar-fill" style="width:${Math.round(c.enrolled / max * 100)}%"></span></div>
+      <div class="bar-track"><span class="bar-fill" style="--w:${(c.enrolled / max).toFixed(3)}"></span></div>
       <div class="bar-value">${c.enrolled}<span style="color:var(--muted);font-weight:400">/${c.capacity}</span></div>
     </div>`).join('') : '<div style="color:var(--muted);text-align:center;padding:20px;">暂无进行中的班级</div>';
 }

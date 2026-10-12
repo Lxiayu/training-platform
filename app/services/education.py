@@ -2,7 +2,7 @@
 from typing import Any
 
 from app.core.exceptions import BizException
-from app.db.jsondb import db, now_iso
+from app.db.repository import db
 from app.services.base import CrudService, today
 
 
@@ -98,10 +98,5 @@ class StudentService(CrudService):
         return super().create(data)
 
     def delete(self, code: str) -> None:
-        """删除学员并级联软删其全部缴费记录（同一事务，失败整体回滚）。"""
-        with db.transaction() as data:
-            student = db.locate("students", code, label="学员")
-            student["deletedAt"] = now_iso()
-            for p in data["payments"]:
-                if p.get("studentId") == code and not p.get("deletedAt"):
-                    p["deletedAt"] = now_iso()
+        """删除学员并级联软删其全部缴费记录（同一数据库事务内完成）。"""
+        db.soft_delete_student_cascade(code)

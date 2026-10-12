@@ -8,6 +8,7 @@ from app.api import (
     dashboard,
     news,
     payments,
+    portal,
     resources,
     settings,
     students,
@@ -28,6 +29,7 @@ for module_router in (
     news.router,
     resources.router,
     dashboard.router,
+    portal.router,
     settings.router,
 ):
     api_router.include_router(module_router)

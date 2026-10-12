@@ -1,10 +1,10 @@
-"""认证 / 用户 / 教师 业务规则。"""
+"""认证 / 用户 / 教师 / 身份门户 业务规则。"""
 from typing import Any
 
-from app.core.config import DEFAULT_USER_PASSWORD
+from app.core.config import DEFAULT_USER_PASSWORD, IDENTITY_STAFF, now_iso
 from app.core.exceptions import BizException
 from app.core.security import create_token, hash_password, verify_password
-from app.db.jsondb import db, now_iso
+from app.db.repository import db
 from app.services.base import CrudService, today
 
 ROLE_ADMIN = "超级管理员"
@@ -16,8 +16,9 @@ def public_user(user: dict) -> dict:
 
 
 class AuthService:
-    def login(self, username: str, password: str) -> dict:
-        user = db.find("users", (username or "").strip())
+    def login(self, login_id: str, password: str) -> dict:
+        """四类身份统一登录：支持用户名或手机号（家长）登录。"""
+        user = db.find_account(login_id)
         if user is None or not verify_password(password or "", user.get("passwordHash", "")):
             raise BizException(401, "账号或密码错误")
         if user.get("status") != "启用":
@@ -43,13 +44,89 @@ class AuthService:
         return public_user(rec)
 
 
+class AccountContextService:
+    """按登录身份返回专属工作台数据，清晰区分 staff / teacher / student / parent。"""
+
+    def build(self, user: dict) -> dict[str, Any]:
+        identity = user.get("identity", IDENTITY_STAFF)
+        base = {
+            "identity": identity,
+            "role": user.get("role"),
+            "name": user.get("name"),
+            "username": user.get("username"),
+        }
+        if identity == "teacher":
+            return {**base, **self._teacher(user)}
+        if identity == "student":
+            return {**base, **self._student(user)}
+        if identity == "parent":
+            return {**base, **self._parent(user)}
+        return base
+
+    def _teacher(self, user: dict) -> dict[str, Any]:
+        code = user.get("refId")
+        classes = db.classes_of_teacher(code or "")
+        enriched = []
+        total_students = 0
+        for c in classes:
+            students = [s for s in db.alive("students") if s.get("classId") == c["id"]]
+            course = db.find("courses", c.get("courseId") or "")
+            enriched.append({
+                "id": c["id"], "name": c["name"],
+                "courseName": course["name"] if course else "",
+                "schedule": c.get("schedule"), "status": c.get("status"),
+                "enrolled": len(students),
+            })
+            total_students += len(students)
+        return {"teacherId": code, "classes": enriched, "classCount": len(enriched),
+                "studentCount": total_students}
+
+    def _student(self, user: dict) -> dict[str, Any]:
+        code = user.get("refId")
+        stu = db.find("students", code or "")
+        if not stu:
+            return {"studentId": code}
+        cls = db.find("classes", stu.get("classId") or "")
+        course = db.find("courses", cls.get("courseId") or "") if cls else None
+        teacher = db.find("teachers", cls.get("teacherId") or "") if cls else None
+        payments = [p for p in db.alive("payments") if p.get("studentId") == code]
+        paid = sum(float(p.get("amount") or 0) for p in payments if p.get("status") == "已支付")
+        return {
+            "studentId": code, "studentName": stu.get("name"),
+            "grade": stu.get("grade"), "status": stu.get("status"),
+            "className": cls["name"] if cls else "",
+            "courseName": course["name"] if course else "",
+            "teacherName": teacher["name"] if teacher else "",
+            "schedule": cls.get("schedule") if cls else "",
+            "paidTotal": round(paid, 2), "paymentCount": len(payments),
+        }
+
+    def _parent(self, user: dict) -> dict[str, Any]:
+        code = user.get("refId")
+        children = db.list_children_of(code or "")
+        enriched = []
+        for stu in children:
+            cls = db.find("classes", stu.get("classId") or "")
+            course = db.find("courses", cls.get("courseId") or "") if cls else None
+            teacher = db.find("teachers", cls.get("teacherId") or "") if cls else None
+            enriched.append({
+                "studentId": stu["id"], "name": stu.get("name"),
+                "grade": stu.get("grade"), "status": stu.get("status"),
+                "className": cls["name"] if cls else "",
+                "courseName": course["name"] if course else "",
+                "teacherName": teacher["name"] if teacher else "",
+            })
+        return {"parentCode": code, "children": enriched, "childCount": len(enriched)}
+
+
 class UserService(CrudService):
     coll = "users"
     label = "用户"
     search_fields = ("username", "name", "phone", "email")
 
     def list(self, *, role: str | None = None, **kwargs) -> dict:
-        return super().list(extra_filters={"role": role} if role else None, **kwargs)
+        # 用户管理仅面向后台员工账号（教师 / 学员 / 家长门户账号不在此列）
+        return super().list(extra_filters={"role": role, "identity": IDENTITY_STAFF}, **kwargs)
 
     def create(self, data: dict[str, Any]) -> dict:
         username = (data.get("username") or "").strip()
@@ -61,10 +138,12 @@ class UserService(CrudService):
             "passwordHash": hash_password(data.get("password") or DEFAULT_USER_PASSWORD),
             "name": data.get("name") or username,
             "role": data.get("role") or "教务管理员",
+            "identity": IDENTITY_STAFF,
+            "status": data.get("status") or "启用",
             "phone": data.get("phone") or "",
             "email": data.get("email") or None,
             "joinDate": data.get("joinDate") or today(),
-            "status": data.get("status") or "启用",
+            "refId": None,
             "createdAt": ts,
             "updatedAt": ts,
         }
@@ -105,7 +184,8 @@ class UserService(CrudService):
         )
         if losing:
             admins = [u for u in db.alive("users")
-                      if u.get("role") == ROLE_ADMIN and u.get("status") == "启用"]
+                      if u.get("role") == ROLE_ADMIN and u.get("status") == "启用"
+                      and u.get("identity") == IDENTITY_STAFF]
             if len(admins) <= 1:
                 raise BizException(409, "系统至少需保留一个启用的超级管理员")
 

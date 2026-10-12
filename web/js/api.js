@@ -108,6 +108,9 @@ const api = {
   me() {
     return request('GET', '/auth/me');
   },
+  authContext() {
+    return request('GET', '/auth/context');
+  },
   updateProfile(data) {
     return request('PUT', '/auth/profile', data);
   },

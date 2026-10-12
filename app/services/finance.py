@@ -3,7 +3,8 @@ from datetime import datetime
 from typing import Any
 
 from app.core.exceptions import BizException
-from app.db.jsondb import db, now_iso
+from app.core.config import now_iso
+from app.db.repository import db
 from app.services.base import CrudService, today
 
 STATUS_PENDING = "待确认"

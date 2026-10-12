@@ -73,12 +73,19 @@ window.DB = { users: [], teachers: [], courses: [], classes: [], students: [], p
 
 async function hydrate() {
   const user = getSessionUser();
+  // 管理类集合（学员/班级/课程/教师/缴费/用户）仅员工可见，非员工跳过以免 403
+  const staffOnly = {
+    teachers: isStaff(user) ? api.list('teachers') : Promise.resolve({ list: [] }),
+    courses:  isStaff(user) ? api.list('courses')  : Promise.resolve({ list: [] }),
+    classes:  isStaff(user) ? api.list('classes')  : Promise.resolve({ list: [] }),
+    students: isStaff(user) ? api.list('students') : Promise.resolve({ list: [] }),
+    payments: isStaff(user) ? api.list('payments') : Promise.resolve({ list: [] }),
+    users:    isStaff(user) ? api.list('users')    : Promise.resolve({ list: [] }),
+  };
   const [teachers, courses, classes, students, payments, news, resources, conf, users] = await Promise.all([
-    api.list('teachers'), api.list('courses'), api.list('classes'),
-    api.list('students'), api.list('payments'), api.list('news'), api.list('resources'),
-    api.settingsGet(),
-    // 用户列表仅管理员可见，普通角色跳过以免 403
-    isAdmin(user) ? api.list('users') : Promise.resolve({ list: [] }),
+    staffOnly.teachers, staffOnly.courses, staffOnly.classes,
+    staffOnly.students, staffOnly.payments, api.list('news'), api.list('resources'),
+    api.settingsGet(), staffOnly.users,
   ]);
   DB.teachers = teachers.list;  DB.courses = courses.list;  DB.classes = classes.list;
   DB.students = students.list;  DB.payments = payments.list; DB.news = news.list;
@@ -95,6 +102,11 @@ async function hydrate() {
 async function boot(pageKey, needData = true) {
   const user = renderLayout(pageKey);
   if (!user) return null;
+  // 员工专属页面：非员工（教师 / 学员 / 家长）统一引导到身份门户
+  if (STAFF_PAGES.has(pageKey) && !isStaff(user)) {
+    location.replace('portal.html');
+    return null;
+  }
   if (needData) {
     try {
       await hydrate();
@@ -134,6 +146,33 @@ function emptyRow(cols, text = '暂无数据') {
   return `<tr><td colspan="${cols}" class="table-empty"><div style="padding:36px 0">${ICONS.empty}<div style="margin-top:8px">${esc(text)}</div></div></td></tr>`;
 }
 
+/* ---------- 可复用区块：页面头 / 空状态 / 骨架屏 ---------- */
+function pageHead(title, sub = '', actions = '') {
+  return `<div class="page-head reveal" data-d="1">
+    <div class="page-head-main">
+      <h1>${esc(title)}</h1>
+      ${sub ? `<div class="sub">${esc(sub)}</div>` : ''}
+    </div>
+    <div class="page-head-actions">${actions}</div>
+  </div>`;
+}
+function emptyState(icon, title, desc = '', actions = '') {
+  const ic = ICONS[icon] || ICONS.empty;
+  return `<div class="empty-state">
+    <div class="empty-ico">${ic}</div>
+    <h3>${esc(title)}</h3>
+    ${desc ? `<p>${esc(desc)}</p>` : ''}
+    ${actions ? `<div class="empty-actions">${actions}</div>` : ''}
+  </div>`;
+}
+function skeleton(lines = 3, block = true) {
+  let h = '';
+  if (block) h += `<div class="skeleton sk-block"></div>`;
+  const w = [92, 80, 86, 70];
+  for (let i = 0; i < lines; i++) h += `<div class="skeleton sk-line" style="width:${w[i % 4]}%"></div>`;
+  return h;
+}
+
 /* ---------- 页面导航配置 ---------- */
 const NAV_GROUPS = [
   { title: '总 览', items: [
@@ -159,9 +198,41 @@ const NAV_GROUPS = [
 const PAGE_TITLES = {
   dashboard: '工作台', courses: '课程管理', classes: '班级管理', teachers: '教师管理',
   students: '学生管理', payments: '缴费管理', news: '新闻中心', resources: '课件资源',
-  users: '用户管理', profile: '个人信息', settings: '系统设置'
+  users: '用户管理', profile: '个人信息', settings: '系统设置', portal: '我的门户'
 };
+
+/* 非员工（教师 / 学员 / 家长）专属导航：仅开放门户与可阅读的内容 */
+const PORTAL_NAV_GROUPS = [
+  { title: '我 的', items: [
+    { key: 'portal', label: '我的门户', icon: 'usercog', href: 'portal.html' }
+  ]},
+  { title: '内 容', items: [
+    { key: 'news',      label: '新闻中心', icon: 'news',   href: 'news.html' },
+    { key: 'resources', label: '课件资源', icon: 'folder', href: 'resources.html' }
+  ]},
+  { title: '账 户', items: [
+    { key: 'profile',  label: '个人信息', icon: 'idcard',  href: 'profile.html' }
+  ]}
+];
+
+/* 仅员工（后台）可见的页面：非员工访问会被重定向到门户 */
+const STAFF_PAGES = new Set(['dashboard', 'courses', 'classes', 'teachers', 'students', 'payments', 'users', 'settings']);
+
 function isAdmin(user) { return !!user && user.role === '超级管理员'; }
+function isStaff(user) { return !!user && user.identity === 'staff'; }
+function navGroupsFor(user) { return isStaff(user) ? NAV_GROUPS : PORTAL_NAV_GROUPS; }
+
+/* 身份元数据：用于顶栏徽章与门户区分 */
+const IDENTITY_META = {
+  staff:   { label: '后台员工', pill: 'staff' },
+  teacher: { label: '教师',   pill: 'teacher' },
+  student: { label: '学员',   pill: 'student' },
+  parent:  { label: '家长',   pill: 'parent' },
+};
+function identityPill(user) {
+  const m = IDENTITY_META[user.identity] || { label: user.identity || '用户', pill: 'staff' };
+  return `<span class="identity-pill ${m.pill}"><span class="dot"></span>${esc(m.label)}</span>`;
+}
 
 /* ---------- 会话（token 存取见 api.js） ---------- */
 function doLogout() {
@@ -183,7 +254,7 @@ function renderLayout(pageKey) {
       </div>
     </div>
     <nav class="sidebar-nav">
-      ${NAV_GROUPS.map(g => {
+      ${navGroupsFor(user).map(g => {
         const items = g.items.filter(it => !it.adminOnly || isAdmin(user));
         if (!items.length) return '';
         return `
@@ -193,7 +264,7 @@ function renderLayout(pageKey) {
         `).join('')}`;
       }).join('')}
     </nav>
-    <div class="sidebar-foot">启航编程管理系统 v0.3<br>演示版 · 前后端联调</div>`;
+    <div class="sidebar-foot">启航编程管理系统 v0.4<br>演示版 · 前后端联调</div>`;
 
   $('#topbar').innerHTML = `
     <button class="icon-btn hamburger" id="btn-menu" title="菜单">${ICONS.menu}</button>
@@ -203,6 +274,7 @@ function renderLayout(pageKey) {
         <div class="user-name">${esc(user.name)}</div>
         <div class="user-role">${esc(user.role)}</div>
       </div>
+      ${identityPill(user)}
       ${avatarHtml(user.name)}
       <button class="icon-btn" id="btn-logout" title="退出登录">${ICONS.logout}</button>
     </div>`;

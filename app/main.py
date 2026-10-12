@@ -15,16 +15,34 @@ from fastapi.staticfiles import StaticFiles
 from app.api import api_router
 from app.core.config import WEB_DIR
 from app.core.exceptions import BizException
+from app.db.repository import db as repository
+from app.db.seed import seed_db
+from app.db.session import Base, init_db
+import app.db.models  # noqa: F401  确保模型注册到 metadata
+
+
+def _ensure_db() -> None:
+    """建表并在空库时播种种子数据（uvicorn 启动与测试首次访问均会触发）。"""
+    init_db()
+    if repository.find("users", "admin") is None:
+        seed_db()
+
 
 app = FastAPI(
     title="启航编程管理系统 API",
     version="0.1.0",
     description=(
-        "培训机构一站式管理后端 · 原型阶段（JSON 文件暂存）。\n\n"
+        "培训机构一站式管理后端 · 关系数据库版（SQLAlchemy + SQLite/MySQL）。\n\n"
         "统一响应壳：成功 `{code: 0, message, data}`，失败 `{code, message}`。\n\n"
         "认证方式：`Authorization: Bearer <token>`（POST /api/v1/auth/login 获取）。"
     ),
 )
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    _ensure_db()
+
 
 app.add_middleware(
     CORSMiddleware,

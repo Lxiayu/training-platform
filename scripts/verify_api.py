@@ -374,6 +374,18 @@ def scenario_settings_users(admin_token: str, jw_token: str):
 def scenario_align(admin_token: str, jw_token: str):
     print("== 前端对齐项（搜索字段 / 待确认金额 / 重置数据） ==")
 
+    # ---- 普通用户自助更新资料 ----
+    r = client.put("/api/v1/auth/profile", headers=auth(jw_token),
+                   json={"name": "李文静", "phone": "13900001111", "email": "jw@qihang.dev"})
+    check("自助更新个人信息", r.status_code == 200 and data_of(r.json())["phone"] == "13900001111"
+          and "passwordHash" not in data_of(r.json()))
+    r = client.get("/api/v1/auth/me", headers=auth(jw_token))
+    check("auth/me 反映更新后的资料", r.status_code == 200 and data_of(r.json())["email"] == "jw@qihang.dev")
+    r = client.put("/api/v1/auth/profile", headers=auth(jw_token),
+                   json={"name": "李文静", "role": "超级管理员"})
+    check("自助更新不支持改角色（被忽略）", r.status_code == 200
+          and data_of(r.json())["role"] == "教务管理员")
+
     # ---- 搜索字段对齐：支持按业务编号搜索（大小写不敏感） ----
     r = client.get("/api/v1/courses", params={"keyword": "kc001"}, headers=auth(admin_token))
     rows = data_of(r.json())["list"]

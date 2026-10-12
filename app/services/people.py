@@ -33,6 +33,15 @@ class AuthService:
             label="用户",
         )
 
+    def update_profile(self, user: dict, patch: dict) -> dict:
+        """普通用户自助维护姓名 / 手机 / 邮箱（不能改角色与状态）。"""
+        fields = {k: v for k, v in patch.items() if v is not None}
+        if not fields:
+            raise BizException(400, "没有需要更新的内容")
+        fields["updatedAt"] = now_iso()
+        rec = db.update_fields("users", user["username"], fields, label="用户")
+        return public_user(rec)
+
 
 class UserService(CrudService):
     coll = "users"

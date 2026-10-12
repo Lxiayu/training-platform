@@ -29,6 +29,13 @@ class ChangePasswordRequest(CamelModel):
     new_password: str = Field(min_length=6, max_length=32)
 
 
+class ProfileUpdate(CamelModel):
+    """普通用户自助维护的资料字段（auth/profile）。"""
+    name: str | None = Field(default=None, min_length=1, max_length=32)
+    phone: str | None = Field(default=None, min_length=5, max_length=20)
+    email: str | None = None
+
+
 # ---------- 用户 ----------
 
 class UserCreate(CamelModel):
@@ -47,6 +54,7 @@ class UserUpdate(CamelModel):
     role: str | None = None
     phone: str | None = Field(default=None, min_length=5, max_length=20)
     email: str | None = None
+    join_date: str | None = None
     status: str | None = None
 
 

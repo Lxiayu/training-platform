@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 
 from app.core.deps import get_current_user
 from app.core.response import ok
-from app.schemas import ChangePasswordRequest, LoginRequest
+from app.schemas import ChangePasswordRequest, LoginRequest, ProfileUpdate
 from app.services.people import AuthService, public_user
 
 router = APIRouter(tags=["认证"])
@@ -18,6 +18,11 @@ def login(body: LoginRequest):
 @router.get("/auth/me")
 def me(user: dict = Depends(get_current_user)):
     return ok(public_user(user))
+
+
+@router.put("/auth/profile")
+def update_profile(body: ProfileUpdate, user: dict = Depends(get_current_user)):
+    return ok(auth_service.update_profile(user, body.model_dump(by_alias=True)), "个人信息已保存")
 
 
 @router.put("/auth/password")

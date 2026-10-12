@@ -1,5 +1,6 @@
 /* ============================================================
  * resources.js —— 课件资源：资源库卡片 / 筛选 / 上传编辑删除 / 模拟下载
+ * 数据来源：/api/v1/resources（下载计数走 /resources/{id}/download 专用端点）
  * ============================================================ */
 
 let currentEditId = null;
@@ -11,8 +12,8 @@ const TYPE_META = {
   '素材包':   { icon: 'package',  cls: 'res-icon-material' }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('resources')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('resources')) return;
 
   // 课程筛选下拉（动态生成）
   $('#f-course').innerHTML = '<option value="">全部课程</option>' +
@@ -73,7 +74,7 @@ function renderGrid() {
 }
 
 /* ---------- 卡片操作 ---------- */
-function onGridClick(e) {
+async function onGridClick(e) {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const { act, id } = btn.dataset;
@@ -83,15 +84,19 @@ function onGridClick(e) {
   if (act === 'view') {
     showToast(r.type === '教学视频' ? '演示版暂不支持在线播放，可下载后查看' : '演示版暂不支持在线预览，可直接下载查看', 'info');
   } else if (act === 'down') {
-    r.downloads = (r.downloads || 0) + 1;
-    saveDB(); renderGrid();
-    showToast(`已开始下载「${r.title}」（模拟）`);
+    // 下载计数由后端累加并返回更新后的记录
+    const rec = await apiOk(() => api.resourceDownload(id), '');
+    if (!rec) return;
+    const idx = DB.resources.findIndex(x => x.id === id);
+    if (idx > -1) DB.resources[idx] = rec;
+    renderGrid();
+    showToast(`已开始下载「${rec.title}」（模拟）`);
   } else if (act === 'edit') {
     openEditor(r);
   } else if (act === 'del') {
-    askConfirm('删除资源', `确定删除「${r.title}」吗？删除后不可恢复。`, () => {
-      DB.resources = DB.resources.filter(x => x.id !== id);
-      saveDB(); renderGrid();
+    askConfirm('删除资源', `确定删除「${r.title}」吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('resources', id))) return;
+      await hydrate(); renderGrid();
       showToast('资源已删除');
     });
   }
@@ -118,7 +123,7 @@ function openEditor(r) {
   $('#f-title').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const title = $('#f-title');
   const size = $('#f-size');
   const date = $('#f-date');
@@ -139,13 +144,8 @@ function submitForm() {
     status: $('#f-status-edit').value
   };
 
-  if (isEdit) {
-    const idx = DB.resources.findIndex(x => x.id === currentEditId);
-    if (idx > -1) DB.resources[idx] = { ...DB.resources[idx], ...data };
-  } else {
-    DB.resources.push({ id: nextId('ZY', DB.resources), downloads: 0, ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('resources', currentEditId, data) : api.create('resources', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderGrid();
   showToast(isEdit ? '资源信息已更新' : '资源上传成功（模拟）');

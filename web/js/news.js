@@ -1,5 +1,6 @@
 /* ============================================================
  * news.js —— 新闻中心：分类筛选 / 置顶头条 / 详情 / 发布编辑删除
+ * 数据来源：/api/v1/news（阅读量走 /news/{id}/view 专用端点）
  * ============================================================ */
 
 let currentEditId = null;
@@ -13,8 +14,8 @@ const CAT_META = {
   '开班信息': { icon: 'users',    color: '#10b981' }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('news')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('news')) return;
 
   $('#kw').addEventListener('input', renderList);
   $('#btn-add').addEventListener('click', () => openEditor(null));
@@ -105,12 +106,13 @@ function renderList() {
     </div>`;
 }
 
-/* ---------- 详情 ---------- */
-function openDetail(id) {
-  const n = byId(DB.news, id);
+/* ---------- 详情（阅读量由后端 /news/{id}/view 累加并返回） ---------- */
+async function openDetail(id) {
+  if (!byId(DB.news, id)) return;
+  const n = await apiOk(() => api.newsView(id), '');
   if (!n) return;
-  n.views = (n.views || 0) + 1;
-  saveDB();
+  const idx = DB.news.findIndex(x => x.id === id);
+  if (idx > -1) DB.news[idx] = n;
   renderList();
   $('#detail-body').innerHTML = `
     <div class="news-detail-title">${esc(n.title)}</div>
@@ -131,9 +133,9 @@ function handleAct(btn) {
   if (act === 'edit') {
     openEditor(n);
   } else if (act === 'del') {
-    askConfirm('删除新闻', `确定删除「${n.title}」吗？删除后不可恢复。`, () => {
-      DB.news = DB.news.filter(x => x.id !== id);
-      saveDB(); renderList();
+    askConfirm('删除新闻', `确定删除「${n.title}」吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('news', id))) return;
+      await hydrate(); renderList();
       showToast('新闻已删除');
     });
   }
@@ -154,7 +156,7 @@ function openEditor(n) {
   $('#f-title').focus();
 }
 
-function submitForm() {
+async function submitForm() {
   const title = $('#f-title');
   const date = $('#f-date');
   const author = $('#f-author');
@@ -174,13 +176,8 @@ function submitForm() {
     content: content.value.split(/\n+/).map(s => s.trim()).filter(Boolean)
   };
 
-  if (isEdit) {
-    const idx = DB.news.findIndex(x => x.id === currentEditId);
-    if (idx > -1) DB.news[idx] = { ...DB.news[idx], ...data };
-  } else {
-    DB.news.push({ id: nextId('XW', DB.news), views: 0, ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('news', currentEditId, data) : api.create('news', data))) return;
+  await hydrate();
   closeModal('editor-modal');
   renderList();
   showToast(isEdit ? '新闻已更新' : '新闻发布成功');

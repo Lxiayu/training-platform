@@ -1,11 +1,12 @@
 /* ============================================================
  * payments.js —— 缴费管理：统计 / 记录 / 登记 / 确认 / 作废
+ * 数据来源：/api/v1/payments（统计走 /payments/stats 专用端点）
  * ============================================================ */
 
 let currentEditId = null;
 
-document.addEventListener('DOMContentLoaded', () => {
-  if (!renderLayout('payments')) return;
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!await boot('payments')) return;
 
   // 选择学员后，班级自动切换到该学员所在班级并带出课程价格
   $('#f-student').addEventListener('change', () => {
@@ -23,7 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#btn-submit').addEventListener('click', submitForm);
   $('#tbody').addEventListener('click', onTableClick);
 
-  renderStats();
+  await renderStats();
   renderTable();
 });
 
@@ -51,15 +52,13 @@ function syncAmount() {
   }
 }
 
-/* ---------- 统计 ---------- */
-function renderStats() {
-  const now = new Date();
-  const ym = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-  const paid = DB.payments.filter(p => p.status === '已支付');
-  $('#stat-month').textContent = money(paid.filter(p => p.date.startsWith(ym)).reduce((s, p) => s + p.amount, 0));
-  const pending = DB.payments.filter(p => p.status === '待确认');
-  $('#stat-pending').textContent = pending.length + ' 笔 · ' + money(pending.reduce((s, p) => s + p.amount, 0));
-  $('#stat-total').textContent = money(paid.reduce((s, p) => s + p.amount, 0));
+/* ---------- 统计（后端 /payments/stats 口径：仅「已支付」计入收入） ---------- */
+async function renderStats() {
+  const st = await apiOk(() => api.paymentStats(), '');
+  if (!st) return;
+  $('#stat-month').textContent = money(st.monthIncome);
+  $('#stat-pending').textContent = st.pendingCount + ' 笔 · ' + money(st.pendingAmount);
+  $('#stat-total').textContent = money(st.totalIncome);
 }
 
 /* ---------- 列表 ---------- */
@@ -113,21 +112,22 @@ function onTableClick(e) {
   if (act === 'edit') {
     openEditor(p);
   } else if (act === 'confirm') {
-    askConfirm('确认到账', `确认学员「${studentName(p.studentId)}」的 ${money(p.amount)} 缴费已到账吗？`, () => {
-      p.status = '已支付';
-      saveDB(); renderStats(); renderTable();
+    // 仅「待确认」可确认；状态流转规则由后端校验（409 提示）
+    askConfirm('确认到账', `确认学员「${studentName(p.studentId)}」的 ${money(p.amount)} 缴费已到账吗？`, async () => {
+      if (!await apiOk(() => api.paymentConfirm(id))) return;
+      await hydrate(); await renderStats(); renderTable();
       showToast('已确认到账');
     });
   } else if (act === 'void') {
-    askConfirm('作废记录', `确定将流水 ${p.id} 作废吗？作废后不计入收入统计。`, () => {
-      p.status = '已作废';
-      saveDB(); renderStats(); renderTable();
+    askConfirm('作废记录', `确定将流水 ${p.id} 作废吗？作废后不计入收入统计。`, async () => {
+      if (!await apiOk(() => api.paymentVoid(id))) return;
+      await hydrate(); await renderStats(); renderTable();
       showToast('该缴费记录已作废');
     });
   } else if (act === 'del') {
-    askConfirm('删除记录', `确定删除流水 ${p.id}（${studentName(p.studentId)} · ${money(p.amount)}）吗？删除后不可恢复。`, () => {
-      DB.payments = DB.payments.filter(x => x.id !== id);
-      saveDB(); renderStats(); renderTable();
+    askConfirm('删除记录', `确定删除流水 ${p.id}（${studentName(p.studentId)} · ${money(p.amount)}）吗？删除后不可恢复。`, async () => {
+      if (!await apiOk(() => api.remove('payments', id))) return;
+      await hydrate(); await renderStats(); renderTable();
       showToast('缴费记录已删除');
     });
   }
@@ -147,7 +147,7 @@ function openEditor(p) {
   openModal('editor-modal');
 }
 
-function submitForm() {
+async function submitForm() {
   const amount = $('#f-amount');
   const date = $('#f-date');
   const studentId = $('#f-student').value;
@@ -167,15 +167,10 @@ function submitForm() {
     note: $('#f-note').value.trim()
   };
 
-  if (isEdit) {
-    const idx = DB.payments.findIndex(p => p.id === currentEditId);
-    if (idx > -1) DB.payments[idx] = { ...DB.payments[idx], ...data };
-  } else {
-    DB.payments.push({ id: nextId('JF', DB.payments), ...data });
-  }
-  saveDB();
+  if (!await apiOk(() => isEdit ? api.update('payments', currentEditId, data) : api.create('payments', data))) return;
+  await hydrate();
   closeModal('editor-modal');
-  renderStats(); renderTable();
+  await renderStats(); renderTable();
   showToast(isEdit ? '缴费记录已更新' : `已为「${studentName(studentId)}」登记缴费 ${money(data.amount)}`);
 }
 

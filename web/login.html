@@ -86,8 +86,12 @@
       parent:  { user: 'P001',    pass: '123456',   desc: '家长门户：关联学员动态 / 缴费情况（支持手机号登录 15868710001）' },
     };
 
-    // 已登录（token 仍有效）则直接进入系统
-    if (getToken()) location.replace('dashboard.html');
+    // 已登录且用户资料可读（token 仍存储）则按身份进入正确落地页，避免门户用户先闪后台。
+    const existingToken = getToken();
+    const existingUser = getSessionUser();
+    if (existingToken) {
+      location.replace(existingUser && existingUser.identity !== 'staff' ? 'portal.html' : 'dashboard.html');
+    }
 
     const tabs = document.querySelectorAll('.identity-tab');
     tabs.forEach(tab => tab.addEventListener('click', () => {

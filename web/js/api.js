@@ -37,6 +37,18 @@ function clearSession() {
   sessionStorage.removeItem(USER_KEY);
 }
 
+/** 读取当前会话用户信息（无会话或解析失败时返回 null）。 */
+function getSessionUser() {
+  const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    clearSession();
+    return null;
+  }
+}
+
 /* ---------- 请求封装 ---------- */
 
 /**

@@ -10,6 +10,7 @@
 """
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 # 必须在导入 app 之前确定数据库位置（SQLAlchemy engine 在导入时即创建）
 _DB_FILE = os.path.join(tempfile.gettempdir(), "qihang_identities_test.db")
@@ -245,6 +246,52 @@ def test_portal_identity_gating(client):
     assert r.status_code == 200 and len(r.json()["data"]) >= 1
     # 学员访问家长专属接口 -> 403
     assert client.get(f"{API}/portal/parent/children", headers=h(stu)).status_code == 403
+
+
+def test_file_sqlite_uses_thread_safe_pool():
+    """文件型 SQLite 不可用 StaticPool：同步 API 在线程池并发时会串扰会话。"""
+    from sqlalchemy.pool import QueuePool
+
+    from app.db.session import engine
+
+    assert isinstance(engine.pool, QueuePool)
+
+
+def test_parallel_authenticated_reads_do_not_cross_sessions(client):
+    """高并发读请求下认证用户、业务列表与看板不可串线/误报 401。"""
+    staff_token = token_of(client, "staff")
+    teacher_token = token_of(client, "teacher")
+    student_token = token_of(client, "student")
+    parent_token = token_of(client, "parent")
+
+    checks = [
+        (staff_token, f"{API}/auth/me", 200, "admin"),
+        (teacher_token, f"{API}/auth/me", 200, "JS001"),
+        (student_token, f"{API}/auth/me", 200, "XS001"),
+        (parent_token, f"{API}/auth/me", 200, "P001"),
+        (staff_token, f"{API}/students?page=1&pageSize=100", 200, None),
+        (staff_token, f"{API}/courses?page=1&pageSize=100", 200, None),
+        (staff_token, f"{API}/dashboard/summary", 200, None),
+        (staff_token, f"{API}/dashboard/heat", 200, None),
+        (teacher_token, f"{API}/students?page=1&pageSize=100", 403, None),
+        (student_token, f"{API}/dashboard/summary", 403, None),
+        (parent_token, f"{API}/payments?page=1&pageSize=100", 403, None),
+    ] * 5
+
+    def request(check):
+        token, path, expected_status, expected_user = check
+        response = client.get(path, headers={"Authorization": f"Bearer {token}"})
+        if response.status_code != expected_status:
+            return f"{path}: 预期 {expected_status}，实际 {response.status_code}，响应={response.text[:120]}"
+        if expected_user:
+            actual_user = response.json().get("data", {}).get("username")
+            if actual_user != expected_user:
+                return f"{path}: 预期用户 {expected_user}，实际 {actual_user}"
+        return None
+
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        failures = [failure for failure in pool.map(request, checks) if failure]
+    assert not failures, "并发请求出现会话/身份串扰：\\n" + "\\n".join(failures)
 
 
 def test_news_readable_by_all_identities(client):

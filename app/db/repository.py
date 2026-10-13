@@ -100,16 +100,16 @@ class DB:
             return [_row_to_dict(coll, r) for r in rows]
 
     def find(self, coll: str, code: str) -> dict[str, Any] | None:
-        rec = self._get(coll, code)
-        return _row_to_dict(coll, rec) if rec is not None else None
+        return self._get(coll, code)
 
     def locate(self, coll: str, code: str, *, label: str = "记录") -> dict[str, Any]:
         rec = self._get(coll, code)
         if rec is None:
             raise BizException(404, f"{label}不存在或已被删除")
-        return _row_to_dict(coll, rec)
+        return rec
 
-    def _get(self, coll: str, code: str) -> Any | None:
+    def _get(self, coll: str, code: str) -> dict[str, Any] | None:
+        """按主键取单条未删除记录（会话内即转为字典，避免使用分离实例）。"""
         Model = MODELS[coll]
         pk = PK_OF[coll]
         with SessionLocal() as s:
@@ -117,7 +117,8 @@ class DB:
             # 软删除列存在时，默认只返回未删除记录（与 JSON 版 locate 行为一致）
             if hasattr(Model, "deletedAt"):
                 stmt = stmt.where(Model.deletedAt.is_(None))
-            return s.scalars(stmt).first()
+            rec = s.scalars(stmt).first()
+            return _row_to_dict(coll, rec) if rec is not None else None
 
     # ---------- 单条写入 ----------
 

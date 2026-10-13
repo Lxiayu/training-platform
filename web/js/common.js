@@ -73,24 +73,43 @@ window.DB = { users: [], teachers: [], courses: [], classes: [], students: [], p
 
 async function hydrate() {
   const user = getSessionUser();
-  // 管理类集合（学员/班级/课程/教师/缴费/用户）仅员工可见，非员工跳过以免 403
-  const staffOnly = {
-    teachers: isStaff(user) ? api.list('teachers') : Promise.resolve({ list: [] }),
-    courses:  isStaff(user) ? api.list('courses')  : Promise.resolve({ list: [] }),
-    classes:  isStaff(user) ? api.list('classes')  : Promise.resolve({ list: [] }),
-    students: isStaff(user) ? api.list('students') : Promise.resolve({ list: [] }),
-    payments: isStaff(user) ? api.list('payments') : Promise.resolve({ list: [] }),
-    users:    isStaff(user) ? api.list('users')    : Promise.resolve({ list: [] }),
+  const staff = isStaff(user);
+  const admin = isAdmin(user);
+  const failed = [];
+
+  // 逐集合容错：某个集合无权限或请求失败时降级为空，不影响其余数据与页面渲染
+  const fetchList = async (resource, allowed = true) => {
+    if (!allowed) return { list: [] };
+    try {
+      const data = await api.list(resource);
+      return { list: (data && data.list) || [] };
+    } catch (e) {
+      failed.push(resource);
+      return { list: [] };
+    }
   };
+  const fetchConf = async () => {
+    try {
+      return await api.settingsGet();
+    } catch (e) {
+      failed.push('settings');
+      return { org: {}, settings: {} };
+    }
+  };
+
+  // 管理类集合（学员/班级/课程/教师/缴费）仅员工可见；用户列表仅超级管理员可拉取
   const [teachers, courses, classes, students, payments, news, resources, conf, users] = await Promise.all([
-    staffOnly.teachers, staffOnly.courses, staffOnly.classes,
-    staffOnly.students, staffOnly.payments, api.list('news'), api.list('resources'),
-    api.settingsGet(), staffOnly.users,
+    fetchList('teachers', staff), fetchList('courses', staff), fetchList('classes', staff),
+    fetchList('students', staff), fetchList('payments', staff),
+    fetchList('news'), fetchList('resources'),
+    fetchConf(), fetchList('users', admin),
   ]);
   DB.teachers = teachers.list;  DB.courses = courses.list;  DB.classes = classes.list;
   DB.students = students.list;  DB.payments = payments.list; DB.news = news.list;
   DB.resources = resources.list; DB.users = users.list;
-  DB.org = conf.org; DB.settings = conf.settings;
+  DB.org = conf.org || {}; DB.settings = conf.settings || {};
+
+  if (failed.length) showToast('部分数据加载失败：' + failed.join('、'), 'error');
 }
 
 /**
@@ -105,6 +124,12 @@ async function boot(pageKey, needData = true) {
   // 员工专属页面：非员工（教师 / 学员 / 家长）统一引导到身份门户
   if (STAFF_PAGES.has(pageKey) && !isStaff(user)) {
     location.replace('portal.html');
+    return null;
+  }
+  // 管理员专属页面：非超级管理员（教务 / 财务 / 前台）引导回工作台
+  if (ADMIN_PAGES.has(pageKey) && !isAdmin(user)) {
+    showToast('您没有权限访问该页面', 'error');
+    location.replace('dashboard.html');
     return null;
   }
   if (needData) {
@@ -217,6 +242,9 @@ const PORTAL_NAV_GROUPS = [
 
 /* 仅员工（后台）可见的页面：非员工访问会被重定向到门户 */
 const STAFF_PAGES = new Set(['dashboard', 'courses', 'classes', 'teachers', 'students', 'payments', 'users', 'settings']);
+
+/* 仅超级管理员可见的页面：非管理员（含教务 / 财务 / 前台）访问会被重定向到工作台 */
+const ADMIN_PAGES = new Set(['users']);
 
 function isAdmin(user) { return !!user && user.role === '超级管理员'; }
 function isStaff(user) { return !!user && user.identity === 'staff'; }

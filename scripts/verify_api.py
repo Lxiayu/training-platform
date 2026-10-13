@@ -14,8 +14,9 @@ import sys
 import tempfile
 from pathlib import Path
 
-# 必须在导入 app 之前设置独立数据文件
-os.environ["QIHANG_DB_FILE"] = str(Path(tempfile.mkdtemp(prefix="qihang-verify-")) / "app.json")
+# 必须在导入 app 之前设置独立数据库（SQLite 临时文件，不污染 data/app.db）
+_DB_FILE = Path(tempfile.mkdtemp(prefix="qihang-verify-")) / "verify.sqlite"
+os.environ["QIHANG_DB_URL"] = f"sqlite:///{_DB_FILE}"
 
 # 项目根目录加入模块搜索路径（支持从任意目录运行）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -24,7 +25,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 
-client = TestClient(app)
+client: TestClient | None = None
 
 PASSED = 0
 FAILED: list[str] = []
@@ -444,14 +445,16 @@ def scenario_align(admin_token: str, jw_token: str):
 
 
 def main() -> int:
-    admin_token, jw_token = scenario_auth()
-    scenario_teachers_courses(admin_token)
-    scenario_classes(admin_token)
-    scenario_dashboard(admin_token)
-    scenario_students_payments(admin_token)
-    scenario_news_resources(admin_token)
-    scenario_settings_users(admin_token, jw_token)
-    scenario_align(admin_token, jw_token)
+    global client
+    with TestClient(app) as client:
+        admin_token, jw_token = scenario_auth()
+        scenario_teachers_courses(admin_token)
+        scenario_classes(admin_token)
+        scenario_dashboard(admin_token)
+        scenario_students_payments(admin_token)
+        scenario_news_resources(admin_token)
+        scenario_settings_users(admin_token, jw_token)
+        scenario_align(admin_token, jw_token)
 
     total = PASSED + len(FAILED)
     print(f"\n===== 冒烟验证：{PASSED}/{total} 通过 =====")

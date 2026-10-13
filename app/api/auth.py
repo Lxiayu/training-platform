@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends
 from app.core.deps import get_current_user
 from app.core.response import ok
 from app.schemas import ChangePasswordRequest, LoginRequest, ProfileUpdate
-from app.services.people import AuthService, public_user
+from app.services.people import AuthService, AccountContextService, public_user
 
 router = APIRouter(tags=["认证"])
 auth_service = AuthService()
+context_service = AccountContextService()
 
 
 @router.post("/auth/login")
@@ -18,6 +19,12 @@ def login(body: LoginRequest):
 @router.get("/auth/me")
 def me(user: dict = Depends(get_current_user)):
     return ok(public_user(user))
+
+
+@router.get("/auth/context")
+def context(user: dict = Depends(get_current_user)):
+    """身份专属工作台数据：按 staff / teacher / student / parent 返回不同内容。"""
+    return ok(context_service.build(user))
 
 
 @router.put("/auth/profile")

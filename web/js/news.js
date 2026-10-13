@@ -5,6 +5,7 @@
 
 let currentEditId = null;
 let filterCat = '';
+let canWrite = false;   // 仅超级管理员可发布 / 编辑 / 删除（与后端 require_admin 一致）
 
 const NEWS_CATS = ['机构动态', '活动通知', '比赛获奖', '开班信息'];
 const CAT_META = {
@@ -15,7 +16,12 @@ const CAT_META = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('news')) return;
+  const user = await boot('news');
+  if (!user) return;
+
+  // 读接口全员可见，写操作仅超级管理员：非管理员隐藏发布入口
+  canWrite = isAdmin(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   $('#kw').addEventListener('input', renderList);
   $('#btn-add').addEventListener('click', () => openEditor(null));
@@ -94,10 +100,10 @@ function renderList() {
       </div>
       <div class="news-side">
         <div class="news-date">${esc((n.date || '').slice(5))}</div>
-        <div class="news-item-actions">
+        ${canWrite ? `<div class="news-item-actions">
           <button class="btn-link" data-act="edit" data-id="${n.id}">${ICONS.edit}编辑</button>
           <button class="btn-link danger" data-act="del" data-id="${n.id}">${ICONS.trash}删除</button>
-        </div>
+        </div>` : ''}
       </div>
     </div>`;
   }).join('') : `
@@ -128,6 +134,7 @@ async function openDetail(id) {
 /* ---------- 编辑 / 删除 ---------- */
 function handleAct(btn) {
   const { act, id } = btn.dataset;
+  if (!canWrite) { showToast('仅超级管理员可发布或维护资讯', 'error'); return; }
   const n = byId(DB.news, id);
   if (!n) return;
   if (act === 'edit') {

@@ -1,15 +1,33 @@
-"""种子数据：与 web/js/data.js 的 DEFAULT_DB 完全一致（2026 秋季学期背景）。
+"""种子数据：与前端原型 DEFAULT_DB 完全一致（2026 秋季学期背景）。
 
-与前端原型的差异（有意为之）：
-- 密码不再明文落盘，初始化时转为 PBKDF2 哈希（passwordHash 字段）；
-- 每条记录补充 createdAt / updatedAt 时间戳（前端不展示，留审计用）；
-- 字段命名保持前端 camelCase（desc、parentPhone 等），迁移 MySQL 时
-  再按《01-数据库设计》映射为下划线列名。
+在数据库版中：
+- 业务实体（教师/课程/班级/学员/缴费/新闻/资源）按原结构入库；
+- 登录账户统一写入 ``accounts`` 表，并区分四类身份：
+  * staff   —— 5 个后台员工（含被禁用的 wangzq，用于演示禁用拦截）；
+  * teacher —— 每个教师一个门户账号（用户名=工号 JSxxx，初始密码 123456）；
+  * student —— 每个学员一个门户账号（用户名=学号 XSxxx）；
+  * parent  —— 由学员的「家长 + 家长电话」去重生成，建立 student_parents 关联。
+密码统一经 PBKDF2 哈希落库，绝不存明文。
 """
 from typing import Any
 
+from app.core.config import DEFAULT_USER_PASSWORD, now_iso
 from app.core.security import hash_password
-from app.db.jsondb import now_iso
+from app.db.models import (
+    Account,
+    Class,
+    Config,
+    Course,
+    News,
+    Payment,
+    Resource,
+    Student,
+    StudentParent,
+    Teacher,
+)
+from app.db.session import SessionLocal
+
+import json as _json
 
 _ORG: dict[str, Any] = {
     "name": "启航编程教育",
@@ -19,13 +37,13 @@ _ORG: dict[str, Any] = {
 }
 
 _SETTINGS: dict[str, Any] = {
-    "allowLeave": True,         # 允许学员自助请假
-    "scheduleRemind": True,     # 上课前自动推送课表提醒
-    "receiptPrint": False,      # 缴费后自动打印收据
-    "newStudentStatus": "在读",  # 新学员默认状态
+    "allowLeave": True,
+    "scheduleRemind": True,
+    "receiptPrint": False,
+    "newStudentStatus": "在读",
 }
 
-# 明文密码仅在此处出现一次，落盘前即转哈希
+# 明文密码仅在此处出现一次，落库前即转哈希
 _USERS: list[dict[str, Any]] = [
     {"username": "admin",   "password": "admin123", "name": "张明远", "role": "超级管理员", "phone": "13800000001", "email": "admin@qihangcode.cn",   "joinDate": "2024-01-10", "status": "启用"},
     {"username": "jiaowu",  "password": "123456",   "name": "李文静", "role": "教务管理员", "phone": "13800000002", "email": "jiaowu@qihangcode.cn",  "joinDate": "2024-03-15", "status": "启用"},
@@ -107,51 +125,22 @@ _PAYMENTS: list[dict[str, Any]] = [
 _NEWS: list[dict[str, Any]] = [
     {"id": "XW001", "title": "2026 秋季班全面开班：Python / C++ 信奥热门班级仅剩少量余位", "category": "开班信息", "top": True,  "date": "2026-09-02", "author": "张明远", "views": 486, "status": "已发布",
      "summary": "秋季学期各班级已陆续开课，Python 入门周日班、C++ 信奥秋季集训班报名火爆，目前仅剩少量余位，欢迎新老学员咨询。",
-     "content": [
-         "新学期伊始，启航编程 2026 秋季班已全面开班。本学期共开设 Scratch、Python、C++ 信奥、人工智能启蒙、Web 前端等六大方向 16 个班级，在读学员突破 400 人。",
-         "其中 Python 零基础入门周日班、C++ 信息学奥赛（CSP-J）秋季集训班报名情况最为火爆，两类班级目前仅剩少量余位。有意向的家长可致电 0571-88886666 或到前台咨询详情。",
-         "尚未报名的学员可根据自身基础选择合适班型：零基础学员推荐从 Scratch 启蒙或 Python 入门起步；有编程基础、希望冲刺竞赛的学员可预约陈国栋教练的 C++ 信奥集训班入学测评。",
-         "秋季班课程表已同步更新至「班级管理」模块，学员家长可联系班主任获取详细上课时间安排。",
-     ]},
+     "content": ["新学期伊始，启航编程 2026 秋季班已全面开班。", "其中 Python 零基础入门周日班、C++ 信息学奥赛（CSP-J）秋季集训班报名情况最为火爆。", "秋季班课程表已同步更新至「班级管理」模块。"]},
     {"id": "XW002", "title": "喜报！我机构 6 名学员晋级 CSP-J/S 复赛", "category": "比赛获奖", "top": False, "date": "2026-09-25", "author": "陈国栋", "views": 352, "status": "已发布",
      "summary": "在刚公布的 CSP-J/S 2026 第一轮认证成绩中，我机构 6 名学员成功晋级第二轮（复赛），创历史最好成绩。",
-     "content": [
-         "9 月 24 日，CCF CSP-J/S 2026 第一轮认证成绩公布，启航编程信奥集训班共 6 名学员成功晋级第二轮认证，其中孙铭泽、朱柏宇两名学员入门级成绩突破 200 分，创机构历史最好成绩。",
-         "本次晋级的 6 名学员均来自陈国栋教练执教的 C++ 信奥秋季集训班，备赛期间坚持每周 6 小时高强度训练，累计完成模拟赛 12 场、专项题单 300 余道。",
-         "第二轮认证将于 10 月底举行，集训班将进入冲刺阶段，针对动态规划、图论等高频考点开展专题突破。祝愿晋级学员再创佳绩！",
-     ]},
+     "content": ["9 月 24 日，CCF CSP-J/S 2026 第一轮认证成绩公布。", "本次晋级的 6 名学员均来自陈国栋教练执教的 C++ 信奥集训班。"]},
     {"id": "XW003", "title": "「编程奇妙夜」中秋亲子体验活动圆满举办", "category": "活动通知", "top": False, "date": "2026-09-15", "author": "林晓芸", "views": 275, "status": "已发布",
      "summary": "9 月 14 日晚，中秋亲子编程体验活动在机构一层多功能厅举行，60 余组家庭参与了 Scratch 月兔奔月挑战。",
-     "content": [
-         "9 月 14 日晚，启航编程「编程奇妙夜」中秋亲子体验活动在机构一层多功能厅热闹举行，共有 60 余组家庭到场参与。",
-         "活动以「月兔奔月」为主题，家长与孩子组队用 Scratch 完成闯关小游戏：从控制月兔躲避陨石，到设计属于自己的广寒宫场景，孩子们在欢声笑语中体验了编程的乐趣。",
-         "活动现场还为每组家庭拍摄了中秋主题合影，并赠送了定制月饼礼盒。不少家长表示，这是孩子第一次独立完成一个完整的小作品，非常有成就感。",
-         "下一场亲子体验活动计划于万圣节周末举办，敬请关注公众号后续通知。",
-     ]},
+     "content": ["9 月 14 日晚，启航编程「编程奇妙夜」中秋亲子体验活动热闹举行。", "活动以「月兔奔月」为主题，家长与孩子组队用 Scratch 完成闯关小游戏。"]},
     {"id": "XW004", "title": "新课程上线：人工智能启蒙（AI）系列课", "category": "机构动态", "top": False, "date": "2026-09-10", "author": "赵雨桐", "views": 198, "status": "已发布",
      "summary": "面向 8-12 岁青少年的人工智能启蒙课程正式上线，孩子们将亲手训练自己的图像识别小模型。",
-     "content": [
-         "经过三个月的课程研发与试讲打磨，启航编程「人工智能启蒙（AI）」系列课于本学期正式上线，首期周六班将于 10 月 17 日开课。",
-         "课程共 36 课时，围绕「看见 AI、理解 AI、创造 AI」三个阶段展开：从认识生活中的智能应用，到理解机器学习的基本原理，最后动手训练专属的图像识别模型。",
-         "课程由人工智能方向讲师赵雨桐主讲，采用「不插电 + 上机」结合的教学方式，无需任何编程基础。首期班级开放 16 个名额，目前剩余 9 个。",
-     ]},
+     "content": ["经过三个月的课程研发与试讲打磨，启航编程「人工智能启蒙（AI）」系列课于本学期正式上线。", "课程共 36 课时，采用「不插电 + 上机」结合的教学方式。"]},
     {"id": "XW005", "title": "关于国庆节放假及课程调整安排的通知", "category": "活动通知", "top": False, "date": "2026-09-26", "author": "李文静", "views": 413, "status": "已发布",
      "summary": "国庆假期（10 月 1 日—7 日）全机构停课，10 月 4 日（周日）原课程顺延或调至线上，详见正文安排。",
-     "content": [
-         "根据国家法定节假日安排，结合机构实际，现将 2026 年国庆节放假及课程调整安排通知如下：",
-         "一、10 月 1 日（周四）至 10 月 7 日（周三）全体班级停课放假；",
-         "二、10 月 3 日（周六）、10 月 4 日（周日）原周末课程统一顺延一周，如有特殊安排以班主任通知为准；",
-         "三、假期期间机构前台正常值班（10:00-16:00），报名咨询、缴费业务均可正常办理；",
-         "四、10 月 8 日（周四）起所有课程恢复正常。祝各位学员和家长节日愉快！",
-     ]},
+     "content": ["根据国家法定节假日安排，现将 2026 年国庆节放假及课程调整安排通知如下：", "一、10 月 1 日（周四）至 10 月 7 日（周三）全体班级停课放假。"]},
     {"id": "XW006", "title": "Python 入门班学员作品展示：小创意大能量", "category": "机构动态", "top": False, "date": "2026-09-18", "author": "王志强", "views": 241, "status": "已发布",
      "summary": "Python 入门班学员本周完成了结课作品展示，从猜数字到成语接龙，14 个小项目各具巧思。",
-     "content": [
-         "本周，Python 入门周日班与周五晚班联合举办了阶段作品展示课，14 名学员依次上台演示了自己的编程小项目。",
-         "张一鸣同学的「成语接龙闯关」将语文知识融入程序逻辑，设计了三级难度；王雨欣同学的「校园失物招领助手」用字典实现了登记与检索，赢得了全班掌声。",
-         "「孩子们不仅写出了能跑的程序，更学会了把生活中的问题拆解成计算机能理解的任务，这正是编程思维的价值。」任课教师王志强评价道。",
-         "作品源代码已上传至「课件资源」模块，学员和家长可登录系统查看。",
-     ]},
+     "content": ["本周，Python 入门周日班与周五晚班联合举办了阶段作品展示课。", "张一鸣同学的「成语接龙闯关」将语文知识融入程序逻辑。"]},
 ]
 
 _RESOURCES: list[dict[str, Any]] = [
@@ -168,43 +157,105 @@ _RESOURCES: list[dict[str, Any]] = [
 ]
 
 
-def _stamped(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """为种子记录补 createdAt / updatedAt 时间戳。"""
-    ts = now_iso()
-    return [{**row, "createdAt": ts, "updatedAt": ts} for row in rows]
+def _stamp() -> str:
+    return now_iso()
 
 
-def build_seed_db() -> dict[str, Any]:
-    """构建完整初始数据库（明文密码在此转为哈希后返回）。"""
-    ts = now_iso()
-    users = [
-        {
-            "username": u["username"],
-            "passwordHash": hash_password(u["password"]),
-            "name": u["name"],
-            "role": u["role"],
-            "phone": u["phone"],
-            "email": u["email"],
-            "joinDate": u["joinDate"],
-            "status": u["status"],
-            "createdAt": ts,
-            "updatedAt": ts,
-        }
-        for u in _USERS
-    ]
-    return {
-        "org": dict(_ORG),
-        "settings": dict(_SETTINGS),
-        "users": users,
-        "teachers": _stamped(_TEACHERS),
-        "courses": _stamped(_COURSES),
-        "classes": _stamped(_CLASSES),
-        "students": _stamped(_STUDENTS),
-        "payments": _stamped(_PAYMENTS),
-        "news": _stamped(_NEWS),
-        "resources": _stamped(_RESOURCES),
-        "meta": {"version": 2, "generatedAt": ts},
-    }
+def _make_account(
+    username: str,
+    password: str,
+    *,
+    name: str,
+    role: str,
+    identity: str,
+    status: str = "启用",
+    phone: str = "",
+    email=None,
+    join_date: str | None = None,
+    ref_id: str | None = None,
+) -> Account:
+    ts = _stamp()
+    return Account(
+        username=username,
+        passwordHash=hash_password(password),
+        name=name,
+        role=role,
+        identity=identity,
+        status=status,
+        phone=phone,
+        email=email,
+        joinDate=join_date,
+        refId=ref_id,
+        createdAt=ts,
+        updatedAt=ts,
+    )
 
 
+def seed_db() -> None:
+    """将完整种子数据写入数据库（reset_schema 之后调用）。"""
+    ts = _stamp()
+    with SessionLocal() as s:
+        # 系统配置
+        s.add(Config(key="org", value=_json.dumps(_ORG, ensure_ascii=False)))
+        s.add(Config(key="settings", value=_json.dumps(_SETTINGS, ensure_ascii=False)))
 
+        # 员工账号（staff）
+        for u in _USERS:
+            s.add(_make_account(
+                u["username"], u["password"],
+                name=u["name"], role=u["role"], identity="staff",
+                status=u["status"], phone=u["phone"], email=u["email"],
+                join_date=u["joinDate"],
+            ))
+
+        # 教师门户账号（teacher）
+        for t in _TEACHERS:
+            s.add(_make_account(
+                t["id"], DEFAULT_USER_PASSWORD,
+                name=t["name"], role="教师", identity="teacher",
+                status="启用" if t["status"] == "在职" else "禁用",
+                phone=t["phone"], email=t["email"],
+                join_date=t["hireDate"], ref_id=t["id"],
+            ))
+
+        # 学员门户账号（student）
+        for st in _STUDENTS:
+            s.add(_make_account(
+                st["id"], DEFAULT_USER_PASSWORD,
+                name=st["name"], role="学员", identity="student",
+                phone=st.get("parentPhone", ""), ref_id=st["id"],
+                join_date=st["enrollDate"],
+            ))
+
+        # 家长门户账号（parent）：按「家长 + 家长电话」去重
+        parent_groups: dict[tuple[str, str], list[str]] = {}
+        for st in _STUDENTS:
+            key = (st["parent"], st["parentPhone"])
+            parent_groups.setdefault(key, []).append(st["id"])
+        for idx, ((pname, pphone), children) in enumerate(parent_groups.items(), start=1):
+            pcode = f"P{idx:03d}"
+            s.add(_make_account(
+                pcode, DEFAULT_USER_PASSWORD,
+                name=pname, role="家长", identity="parent",
+                phone=pphone, ref_id=pcode,
+            ))
+            for sid in children:
+                s.add(StudentParent(parentCode=pcode, studentCode=sid))
+
+        # 业务实体
+        for t in _TEACHERS:
+            s.add(Teacher(**{**t, "createdAt": ts, "updatedAt": ts}))
+        for c in _COURSES:
+            s.add(Course(**{**c, "createdAt": ts, "updatedAt": ts}))
+        for c in _CLASSES:
+            s.add(Class(**{**c, "createdAt": ts, "updatedAt": ts}))
+        for st in _STUDENTS:
+            s.add(Student(**{**st, "createdAt": ts, "updatedAt": ts}))
+        for p in _PAYMENTS:
+            s.add(Payment(**{**p, "createdAt": ts, "updatedAt": ts}))
+        for n in _NEWS:
+            s.add(News(**{**n, "content": _json.dumps(n["content"], ensure_ascii=False),
+                          "createdAt": ts, "updatedAt": ts}))
+        for r in _RESOURCES:
+            s.add(Resource(**{**r, "createdAt": ts, "updatedAt": ts}))
+        s.commit()

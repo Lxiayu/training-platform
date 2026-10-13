@@ -4,6 +4,7 @@
  * ============================================================ */
 
 let currentEditId = null;
+let canWrite = false;   // 仅超级管理员可上传 / 编辑 / 删除（与后端 require_admin 一致）
 
 const TYPE_META = {
   '课件PPT':  { icon: 'filetext', cls: 'res-icon-ppt' },
@@ -13,7 +14,12 @@ const TYPE_META = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('resources')) return;
+  const user = await boot('resources');
+  if (!user) return;
+
+  // 读接口全员可见，写操作仅超级管理员：非管理员隐藏上传入口
+  canWrite = isAdmin(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   // 课程筛选下拉（动态生成）
   $('#f-course').innerHTML = '<option value="">全部课程</option>' +
@@ -62,8 +68,9 @@ function renderGrid() {
         <div class="res-actions">
           <button class="icon-btn sm" data-act="view" data-id="${r.id}" title="预览">${ICONS.eye}</button>
           <button class="icon-btn sm" data-act="down" data-id="${r.id}" title="下载">${ICONS.download}</button>
+          ${canWrite ? `
           <button class="icon-btn sm" data-act="edit" data-id="${r.id}" title="编辑">${ICONS.edit}</button>
-          <button class="icon-btn sm danger" data-act="del" data-id="${r.id}" title="删除">${ICONS.trash}</button>
+          <button class="icon-btn sm danger" data-act="del" data-id="${r.id}" title="删除">${ICONS.trash}</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -92,8 +99,10 @@ async function onGridClick(e) {
     renderGrid();
     showToast(`已开始下载「${rec.title}」（模拟）`);
   } else if (act === 'edit') {
+    if (!canWrite) { showToast('仅超级管理员可维护课件资源', 'error'); return; }
     openEditor(r);
   } else if (act === 'del') {
+    if (!canWrite) { showToast('仅超级管理员可维护课件资源', 'error'); return; }
     askConfirm('删除资源', `确定删除「${r.title}」吗？删除后不可恢复。`, async () => {
       if (!await apiOk(() => api.remove('resources', id))) return;
       await hydrate(); renderGrid();

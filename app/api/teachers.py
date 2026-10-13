@@ -1,7 +1,7 @@
 """教师管理路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_staff
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import TeacherCreate, TeacherUpdate
@@ -17,7 +17,7 @@ def list_teachers(
     keyword: str | None = None,
     subject: str | None = None,
     status: str | None = None,
-    _user: dict = Depends(get_current_user),
+    _user: dict = Depends(require_staff),
 ):
     return ok(teacher_service.list(
         keyword=keyword, subject=subject, status=status, page=p.page, page_size=p.page_size
@@ -25,21 +25,21 @@ def list_teachers(
 
 
 @router.get("/{code}")
-def get_teacher(code: str, _user: dict = Depends(get_current_user)):
+def get_teacher(code: str, _user: dict = Depends(require_staff)):
     return ok(teacher_service.get(code))
 
 
 @router.post("")
-def create_teacher(body: TeacherCreate, _user: dict = Depends(get_current_user)):
+def create_teacher(body: TeacherCreate, _user: dict = Depends(require_staff)):
     return ok(teacher_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_teacher(code: str, body: TeacherUpdate, _user: dict = Depends(get_current_user)):
+def update_teacher(code: str, body: TeacherUpdate, _user: dict = Depends(require_staff)):
     return ok(teacher_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_teacher(code: str, _user: dict = Depends(get_current_user)):
+def delete_teacher(code: str, _user: dict = Depends(require_staff)):
     teacher_service.delete(code)
     return ok(None, "删除成功")

@@ -3,11 +3,14 @@
 字段约定：service 层直接使用前端 camelCase 键（与 JSON 存储一致），
 路由层负责 Pydantic 模型 -> dict(by_alias=True) 的转换。
 """
+from __future__ import annotations
+
 from datetime import date
 from typing import Any
 
 from app.core.exceptions import BizException
-from app.db.jsondb import db, now_iso
+from app.core.config import now_iso
+from app.db.repository import db
 
 
 def today() -> str:

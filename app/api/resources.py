@@ -1,7 +1,7 @@
 """课件资源路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_admin
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import ResourceCreate, ResourceUpdate
@@ -33,17 +33,17 @@ def get_resource(code: str, _user: dict = Depends(get_current_user)):
 
 
 @router.post("")
-def create_resource(body: ResourceCreate, _user: dict = Depends(get_current_user)):
+def create_resource(body: ResourceCreate, _user: dict = Depends(require_admin)):
     return ok(resource_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_resource(code: str, body: ResourceUpdate, _user: dict = Depends(get_current_user)):
+def update_resource(code: str, body: ResourceUpdate, _user: dict = Depends(require_admin)):
     return ok(resource_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_resource(code: str, _user: dict = Depends(get_current_user)):
+def delete_resource(code: str, _user: dict = Depends(require_admin)):
     resource_service.delete(code)
     return ok(None, "删除成功")
 

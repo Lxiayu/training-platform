@@ -1,7 +1,8 @@
 """内容管理：新闻中心 / 课件资源。"""
 from typing import Any
 
-from app.db.jsondb import db, now_iso
+from app.core.config import now_iso
+from app.db.repository import db
 from app.services.base import CrudService, today
 
 

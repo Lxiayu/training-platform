@@ -4,7 +4,7 @@ from typing import Any
 
 from app.core.config import NEW_STUDENT_STATUS_OPTIONS
 from app.core.exceptions import BizException
-from app.db.jsondb import db
+from app.db.repository import db
 
 
 class DashboardService:

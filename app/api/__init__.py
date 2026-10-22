@@ -13,6 +13,7 @@ from app.api import (
     settings,
     students,
     teachers,
+    teaching,
     users,
 )
 
@@ -30,6 +31,7 @@ for module_router in (
     resources.router,
     dashboard.router,
     portal.router,
+    teaching.router,
     settings.router,
 ):
     api_router.include_router(module_router)

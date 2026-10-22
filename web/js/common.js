@@ -162,9 +162,11 @@ function avatarHtml(name, cls = '') {
 const BADGE_MAP = {
   '在售': 'success', '停售': 'gray', '在职': 'success', '离职': 'gray',
   '在读': 'success', '休学': 'warning', '已结课': 'info',
-  '未开班': 'warning', '进行中': 'success',
+  '未开班': 'warning', '进行中': 'success', '已结束': 'gray',
   '已支付': 'success', '待确认': 'warning', '已退款': 'danger', '已作废': 'gray',
-  '启用': 'success', '禁用': 'danger', '已发布': 'success', '草稿': 'gray'
+  '启用': 'success', '禁用': 'danger', '已发布': 'success', '草稿': 'gray',
+  '未提交': 'warning', '已提交': 'info', '已批改': 'success',
+  '出勤': 'success', '迟到': 'warning', '请假': 'info', '缺勤': 'danger'
 };
 function badge(text) { return `<span class="badge badge-${BADGE_MAP[text] || 'gray'}">${esc(text)}</span>`; }
 function emptyRow(cols, text = '暂无数据') {

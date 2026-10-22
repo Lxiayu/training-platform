@@ -160,6 +160,47 @@ const api = {
     recentPayments() { return request('GET', '/dashboard/recent-payments'); },
   },
 
+  /* 作业与考勤（教师 / 学员 / 家长门户） */
+  teacherAssignments(classId) {
+    return request('GET', '/portal/teacher/assignments' + qs({ classId }));
+  },
+  createAssignment(data) {
+    return request('POST', '/portal/teacher/assignments', data);
+  },
+  updateAssignment(id, data) {
+    return request('PUT', '/portal/teacher/assignments/' + encodeURIComponent(id), data);
+  },
+  deleteAssignment(id) {
+    return request('DELETE', '/portal/teacher/assignments/' + encodeURIComponent(id));
+  },
+  assignmentSubmissions(id) {
+    return request('GET', '/portal/teacher/assignments/' + encodeURIComponent(id) + '/submissions');
+  },
+  gradeSubmission(id, score, comment) {
+    return request('POST', '/portal/teacher/submissions/' + encodeURIComponent(id) + '/grade', { score, comment });
+  },
+  teacherAttendance(classId, date) {
+    return request('GET', '/portal/teacher/attendance' + qs({ classId, date }));
+  },
+  saveAttendance(data) {
+    return request('POST', '/portal/teacher/attendance', data);
+  },
+  studentAssignments() {
+    return request('GET', '/portal/student/assignments');
+  },
+  submitAssignment(id, content) {
+    return request('POST', '/portal/student/assignments/' + encodeURIComponent(id) + '/submit', { content });
+  },
+  studentAttendance() {
+    return request('GET', '/portal/student/attendance');
+  },
+  parentAssignments(studentId) {
+    return request('GET', '/portal/parent/assignments' + qs({ studentId }));
+  },
+  parentAttendance(studentId) {
+    return request('GET', '/portal/parent/attendance' + qs({ studentId }));
+  },
+
   /* 系统设置 */
   settingsGet() {
     return request('GET', '/settings');

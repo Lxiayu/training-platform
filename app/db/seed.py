@@ -15,6 +15,8 @@ from app.core.config import DEFAULT_USER_PASSWORD, now_iso
 from app.core.security import hash_password
 from app.db.models import (
     Account,
+    Assignment,
+    Attendance,
     Class,
     Config,
     Course,
@@ -23,6 +25,7 @@ from app.db.models import (
     Resource,
     Student,
     StudentParent,
+    Submission,
     Teacher,
 )
 from app.db.session import SessionLocal
@@ -161,6 +164,57 @@ def _stamp() -> str:
     return now_iso()
 
 
+# 作业（教师面向班级布置）
+_ASSIGNMENTS: list[dict[str, Any]] = [
+    {"id": "HW001", "classId": "BJ002", "teacherId": "JS001", "title": "第 4 讲课后练习：循环与条件判断",
+     "content": "完成课本第 4 章练习 1-3：用 for/while 输出乘法表，并判断一个年份是否为闰年。提交代码与运行结果截图说明。",
+     "dueDate": "2026-10-25", "status": "进行中"},
+    {"id": "HW002", "classId": "BJ002", "teacherId": "JS001", "title": "阶段小测：列表与字典",
+     "content": "实现学生成绩录入与统计：用列表保存成绩，用字典统计各分数段人数。",
+     "dueDate": "2026-10-18", "status": "已结束"},
+    {"id": "HW003", "classId": "BJ003", "teacherId": "JS001", "title": "周五晚班：函数练习",
+     "content": "编写 3 个函数：求最大值、判断素数、字符串反转，并各写一个调用示例。",
+     "dueDate": "2026-10-24", "status": "进行中"},
+    {"id": "HW004", "classId": "BJ001", "teacherId": "JS002", "title": "Scratch 角色移动小练习",
+     "content": "让小猫按键盘方向键移动，碰到边缘时反弹，并说出「到边界啦」。",
+     "dueDate": "2026-10-26", "status": "进行中"},
+    {"id": "HW005", "classId": "BJ004", "teacherId": "JS003", "title": "CSP-J 模拟题第一套",
+     "content": "完成模拟题第一套的选择题与两道编程题，注意时间复杂度。",
+     "dueDate": "2026-10-28", "status": "进行中"},
+]
+
+# 作业提交 / 批改
+_SUBMISSIONS: list[dict[str, Any]] = [
+    {"id": "TJ001", "assignmentId": "HW001", "studentId": "XS005", "content": "已提交乘法表与闰年判断代码，附运行结果。",
+     "submittedAt": "2026-10-20", "status": "已提交", "score": None, "comment": None, "gradedAt": None, "gradedBy": None},
+    {"id": "TJ002", "assignmentId": "HW001", "studentId": "XS006", "content": "乘法表用嵌套循环实现，闰年判断考虑了整百年份。",
+     "submittedAt": "2026-10-20", "status": "已批改", "score": 92, "comment": "循环边界处理得很好，闰年规则完整。", "gradedAt": "2026-10-21", "gradedBy": "JS001"},
+    {"id": "TJ003", "assignmentId": "HW002", "studentId": "XS005", "content": "成绩统计程序已提交。",
+     "submittedAt": "2026-10-17", "status": "已批改", "score": 85, "comment": "字典统计正确，建议补充输入校验。", "gradedAt": "2026-10-18", "gradedBy": "JS001"},
+    {"id": "TJ004", "assignmentId": "HW003", "studentId": "XS009", "content": "三个函数均已实现，附调用示例。",
+     "submittedAt": "2026-10-21", "status": "已提交", "score": None, "comment": None, "gradedAt": None, "gradedBy": None},
+    {"id": "TJ005", "assignmentId": "HW004", "studentId": "XS001", "content": "小猫可以按方向键移动，碰到边缘会反弹并说话。",
+     "submittedAt": "2026-10-19", "status": "已批改", "score": 95, "comment": "动作衔接自然，反弹效果完成得很好。", "gradedAt": "2026-10-20", "gradedBy": "JS002"},
+    {"id": "TJ006", "assignmentId": "HW005", "studentId": "XS012", "content": "选择题完成，编程题第二题超时，正在优化。",
+     "submittedAt": "2026-10-21", "status": "已提交", "score": None, "comment": None, "gradedAt": None, "gradedBy": None},
+]
+
+# 考勤（班级 + 日期 + 学员）
+_ATTENDANCE: list[dict[str, Any]] = [
+    {"id": "KQ001", "classId": "BJ001", "studentId": "XS001", "date": "2026-10-17", "status": "出勤", "note": "", "teacherId": "JS002"},
+    {"id": "KQ002", "classId": "BJ001", "studentId": "XS002", "date": "2026-10-17", "status": "出勤", "note": "", "teacherId": "JS002"},
+    {"id": "KQ003", "classId": "BJ001", "studentId": "XS003", "date": "2026-10-17", "status": "迟到", "note": "迟到 10 分钟", "teacherId": "JS002"},
+    {"id": "KQ004", "classId": "BJ001", "studentId": "XS004", "date": "2026-10-17", "status": "出勤", "note": "", "teacherId": "JS002"},
+    {"id": "KQ005", "classId": "BJ002", "studentId": "XS005", "date": "2026-10-18", "status": "出勤", "note": "", "teacherId": "JS001"},
+    {"id": "KQ006", "classId": "BJ002", "studentId": "XS006", "date": "2026-10-18", "status": "出勤", "note": "", "teacherId": "JS001"},
+    {"id": "KQ007", "classId": "BJ002", "studentId": "XS007", "date": "2026-10-18", "status": "迟到", "note": "迟到 15 分钟", "teacherId": "JS001"},
+    {"id": "KQ008", "classId": "BJ002", "studentId": "XS008", "date": "2026-10-18", "status": "请假", "note": "家长提前请假", "teacherId": "JS001"},
+    {"id": "KQ009", "classId": "BJ003", "studentId": "XS009", "date": "2026-10-16", "status": "出勤", "note": "", "teacherId": "JS001"},
+    {"id": "KQ010", "classId": "BJ003", "studentId": "XS010", "date": "2026-10-16", "status": "出勤", "note": "", "teacherId": "JS001"},
+    {"id": "KQ011", "classId": "BJ003", "studentId": "XS011", "date": "2026-10-16", "status": "缺勤", "note": "学员休学中", "teacherId": "JS001"},
+]
+
+
 def _make_account(
     username: str,
     password: str,
@@ -258,4 +312,10 @@ def seed_db() -> None:
                           "createdAt": ts, "updatedAt": ts}))
         for r in _RESOURCES:
             s.add(Resource(**{**r, "createdAt": ts, "updatedAt": ts}))
+        for a in _ASSIGNMENTS:
+            s.add(Assignment(**{**a, "createdAt": ts, "updatedAt": ts}))
+        for sub in _SUBMISSIONS:
+            s.add(Submission(**{**sub, "createdAt": ts, "updatedAt": ts}))
+        for att in _ATTENDANCE:
+            s.add(Attendance(**{**att, "createdAt": ts, "updatedAt": ts}))
         s.commit()

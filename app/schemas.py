@@ -223,6 +223,43 @@ class ResourceUpdate(CamelModel):
     status: str | None = None
 
 
+# ---------- 作业与考勤 ----------
+
+class AssignmentCreate(CamelModel):
+    class_id: str
+    title: str = Field(min_length=1, max_length=100)
+    content: str | None = Field(default=None, max_length=5000)
+    due_date: str | None = None
+
+
+class AssignmentUpdate(CamelModel):
+    title: str | None = Field(default=None, min_length=1, max_length=100)
+    content: str | None = Field(default=None, max_length=5000)
+    due_date: str | None = None
+    status: str | None = None
+
+
+class SubmissionCreate(CamelModel):
+    content: str = Field(min_length=1, max_length=5000)
+
+
+class GradeRequest(CamelModel):
+    score: int = Field(ge=0, le=100)
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class AttendanceItem(CamelModel):
+    student_id: str
+    status: str = "出勤"
+    note: str | None = Field(default=None, max_length=200)
+
+
+class AttendanceSave(CamelModel):
+    class_id: str
+    date: str
+    items: list[AttendanceItem] = []
+
+
 # ---------- 系统设置 ----------
 
 class SettingsUpdate(CamelModel):

@@ -179,3 +179,57 @@ class StudentParent(Base):
     __table_args__ = (
         UniqueConstraint("parentCode", "studentCode", name="uk_parent_student"),
     )
+
+
+class Assignment(Base):
+    """作业：教师面向某个班级布置，学生提交后由教师批改。"""
+    __tablename__ = "assignments"
+    id = Column(String(16), primary_key=True)  # 作业编号 HW001
+    classId = Column(String(16), nullable=False, index=True)
+    teacherId = Column(String(16), nullable=False, index=True)
+    title = Column(String(128), nullable=False)
+    content = Column(Text, nullable=True)
+    dueDate = Column(String(32), nullable=True)
+    status = Column(String(16), nullable=False, default="进行中")  # 进行中 / 已结束
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+
+
+class Submission(Base):
+    """作业提交与批改：一份作业每个学员至多一条提交记录（可修改后重新提交）。"""
+    __tablename__ = "submissions"
+    id = Column(String(16), primary_key=True)  # 提交编号 TJ001
+    assignmentId = Column(String(16), nullable=False, index=True)
+    studentId = Column(String(16), nullable=False, index=True)
+    content = Column(Text, nullable=True)
+    submittedAt = Column(String(32), nullable=True)
+    status = Column(String(16), nullable=False, default="已提交")  # 已提交 / 已批改
+    score = Column(Integer, nullable=True)       # 0-100
+    comment = Column(Text, nullable=True)
+    gradedAt = Column(String(32), nullable=True)
+    gradedBy = Column(String(32), nullable=True)
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("assignmentId", "studentId", name="uk_submission_assignment_student"),
+    )
+
+
+class Attendance(Base):
+    """考勤：教师按「班级 + 日期 + 学员」记录到班情况。"""
+    __tablename__ = "attendance"
+    id = Column(String(16), primary_key=True)  # 考勤编号 KQ001
+    classId = Column(String(16), nullable=False, index=True)
+    studentId = Column(String(16), nullable=False, index=True)
+    date = Column(String(32), nullable=False, index=True)
+    status = Column(String(8), nullable=False, default="出勤")  # 出勤/迟到/请假/缺勤
+    note = Column(String(256), nullable=True)
+    teacherId = Column(String(16), nullable=False)
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("classId", "studentId", "date", name="uk_attendance_class_student_date"),
+    )

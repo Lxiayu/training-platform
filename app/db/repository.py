@@ -21,6 +21,8 @@ from sqlalchemy import select
 from app.core.exceptions import BizException
 from app.db.models import (
     Account,
+    Assignment,
+    Attendance,
     Class,
     Config,
     Course,
@@ -29,6 +31,7 @@ from app.db.models import (
     Resource,
     Student,
     StudentParent,
+    Submission,
     Teacher,
 )
 from app.db.session import Base, SessionLocal, engine
@@ -43,6 +46,9 @@ MODELS: dict[str, type] = {
     "payments": Payment,
     "news": News,
     "resources": Resource,
+    "assignments": Assignment,
+    "submissions": Submission,
+    "attendance": Attendance,
 }
 PK_OF = {name: ("username" if name == "users" else "id") for name in MODELS}
 
@@ -101,6 +107,15 @@ class DB:
 
     def find(self, coll: str, code: str) -> dict[str, Any] | None:
         return self._get(coll, code)
+
+    def find_one(self, coll: str, **filters: Any) -> dict[str, Any] | None:
+        """按任意字段组合查找单条未删除记录（小数据量，走 ORM 过滤即可）。"""
+        if not filters:
+            return None
+        for row in self.alive(coll):
+            if all(str(row.get(key)) == str(value) for key, value in filters.items()):
+                return row
+        return None
 
     def locate(self, coll: str, code: str, *, label: str = "记录") -> dict[str, Any]:
         rec = self._get(coll, code)

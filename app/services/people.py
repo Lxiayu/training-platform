@@ -6,6 +6,7 @@ from app.core.exceptions import BizException
 from app.core.security import create_token, hash_password, verify_password
 from app.db.repository import db
 from app.services.base import CrudService, today
+from app.services.teaching import TeachingStatsService
 
 ROLE_ADMIN = "超级管理员"
 
@@ -79,7 +80,7 @@ class AccountContextService:
             })
             total_students += len(students)
         return {"teacherId": code, "classes": enriched, "classCount": len(enriched),
-                "studentCount": total_students}
+                "studentCount": total_students, **TeachingStatsService().teacher(code or "")}
 
     def _student(self, user: dict) -> dict[str, Any]:
         code = user.get("refId")
@@ -99,6 +100,7 @@ class AccountContextService:
             "teacherName": teacher["name"] if teacher else "",
             "schedule": cls.get("schedule") if cls else "",
             "paidTotal": round(paid, 2), "paymentCount": len(payments),
+            **TeachingStatsService().student(code or ""),
         }
 
     def _parent(self, user: dict) -> dict[str, Any]:

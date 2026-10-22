@@ -5,7 +5,7 @@
 
 let currentEditId = null;
 let filterCat = '';
-let canWrite = false;   // 仅超级管理员可发布 / 编辑 / 删除（与后端 require_admin 一致）
+let canWrite = false;   // 发布 / 编辑 / 删除仅超管 / 教务（与后端 require_roles 一致）
 
 const NEWS_CATS = ['机构动态', '活动通知', '比赛获奖', '开班信息'];
 const CAT_META = {
@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const user = await boot('news');
   if (!user) return;
 
-  // 读接口全员可见，写操作仅超级管理员：非管理员隐藏发布入口
-  canWrite = isAdmin(user);
+  // 读接口全员可见，写操作仅超管 / 教务：无权限者隐藏发布入口
+  canWrite = canPublishNews(user);
   if (!canWrite) $('#btn-add').style.display = 'none';
 
   $('#kw').addEventListener('input', renderList);
@@ -134,7 +134,7 @@ async function openDetail(id) {
 /* ---------- 编辑 / 删除 ---------- */
 function handleAct(btn) {
   const { act, id } = btn.dataset;
-  if (!canWrite) { showToast('仅超级管理员可发布或维护资讯', 'error'); return; }
+  if (!canWrite) { showToast('您没有权限发布或维护资讯', 'error'); return; }
   const n = byId(DB.news, id);
   if (!n) return;
   if (act === 'edit') {

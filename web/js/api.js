@@ -123,6 +123,13 @@ const api = {
   authContext() {
     return request('GET', '/auth/context');
   },
+  /* 身份门户：缴费详情（服务端按身份 / 关联关系做数据范围校验） */
+  portalStudentPayments() {
+    return request('GET', '/portal/student/payments');
+  },
+  portalParentPayments(studentId) {
+    return request('GET', '/portal/parent/' + encodeURIComponent(studentId) + '/payments');
+  },
   updateProfile(data) {
     return request('PUT', '/auth/profile', data);
   },

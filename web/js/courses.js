@@ -3,8 +3,15 @@
  * 数据来源：/api/v1/courses（boot 后缓存于 DB.courses）
  * ============================================================ */
 
+let currentEditId = null;
+let canWrite = false;   // 写操作仅超管 / 教务（与后端 require_roles 一致）
+
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('courses')) return;
+  const user = await boot('courses');
+  if (!user) return;
+
+  canWrite = canManageAcademic(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   $('#kw').addEventListener('input', renderTable);
   $('#f-category').addEventListener('change', renderTable);
@@ -44,11 +51,12 @@ function renderTable() {
       <td style="font-weight:600;color:var(--primary)">${money(c.price)}</td>
       <td>${badge(c.status)}</td>
       <td class="td-actions">
+        ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${c.id}">${ICONS.edit}编辑</button>
         <button class="btn-link ${c.status === '在售' ? 'danger' : 'success'}" data-act="toggle" data-id="${c.id}">
           ${c.status === '在售' ? '停售' : '上架'}
         </button>
-        <button class="btn-link danger" data-act="del" data-id="${c.id}">${ICONS.trash}删除</button>
+        <button class="btn-link danger" data-act="del" data-id="${c.id}">${ICONS.trash}删除</button>` : ''}
       </td>
     </tr>`).join('') : emptyRow(8, '没有符合条件的课程');
 }
@@ -79,7 +87,6 @@ async function onTableClick(e) {
 }
 
 /* ---------- 新增 / 编辑 ---------- */
-let currentEditId = null;
 
 function openEditor(c) {
   currentEditId = c ? c.id : null;

@@ -4,9 +4,14 @@
  * ============================================================ */
 
 let currentEditId = null;
+let canWrite = false;   // 写操作（报名 / 修改）仅超管 / 教务 / 前台（与后端 require_roles 一致）
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('students')) return;
+  const user = await boot('students');
+  if (!user) return;
+
+  canWrite = canEnrollStudent(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   // 班级下拉（工具栏筛选 + 编辑表单共用渲染）
   const classOptions = () => {
@@ -66,8 +71,9 @@ function renderTable() {
       <td class="td-sub">${esc(s.enrollDate)}</td>
       <td>${badge(s.status)}</td>
       <td class="td-actions">
+        ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${s.id}">${ICONS.edit}编辑</button>
-        <button class="btn-link danger" data-act="del" data-id="${s.id}">${ICONS.trash}删除</button>
+        <button class="btn-link danger" data-act="del" data-id="${s.id}">${ICONS.trash}删除</button>` : ''}
       </td>
     </tr>`;
   }).join('') : emptyRow(10, '没有符合条件的学员');

@@ -1,7 +1,8 @@
 """课件资源路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user, require_admin
+from app.core.config import ROLE_ADMIN, ROLE_ACADEMIC, ROLE_TEACHER
+from app.core.deps import get_current_user, require_roles
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import ResourceCreate, ResourceUpdate
@@ -33,17 +34,17 @@ def get_resource(code: str, _user: dict = Depends(get_current_user)):
 
 
 @router.post("")
-def create_resource(body: ResourceCreate, _user: dict = Depends(require_admin)):
+def create_resource(body: ResourceCreate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC, ROLE_TEACHER))):
     return ok(resource_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_resource(code: str, body: ResourceUpdate, _user: dict = Depends(require_admin)):
+def update_resource(code: str, body: ResourceUpdate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC, ROLE_TEACHER))):
     return ok(resource_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_resource(code: str, _user: dict = Depends(require_admin)):
+def delete_resource(code: str, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC, ROLE_TEACHER))):
     resource_service.delete(code)
     return ok(None, "删除成功")
 

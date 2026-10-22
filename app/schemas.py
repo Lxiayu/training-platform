@@ -166,6 +166,7 @@ class PaymentCreate(CamelModel):
     date: str | None = None
     status: str = "待确认"
     note: str | None = None
+    bill_id: str | None = None  # 可空：按学员自动挂到最早未缴清账单
 
 
 class PaymentUpdate(CamelModel):

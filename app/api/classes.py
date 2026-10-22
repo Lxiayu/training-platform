@@ -1,7 +1,8 @@
 """班级管理路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user, require_staff
+from app.core.config import ROLE_ADMIN, ROLE_ACADEMIC
+from app.core.deps import require_roles, require_staff
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import ClassCreate, ClassUpdate
@@ -32,16 +33,16 @@ def get_class(code: str, _user: dict = Depends(require_staff)):
 
 
 @router.post("")
-def create_class(body: ClassCreate, _user: dict = Depends(require_staff)):
+def create_class(body: ClassCreate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC))):
     return ok(class_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_class(code: str, body: ClassUpdate, _user: dict = Depends(require_staff)):
+def update_class(code: str, body: ClassUpdate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC))):
     return ok(class_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_class(code: str, _user: dict = Depends(require_staff)):
+def delete_class(code: str, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC))):
     class_service.delete(code)
     return ok(None, "删除成功")

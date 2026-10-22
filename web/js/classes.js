@@ -4,9 +4,14 @@
  * ============================================================ */
 
 let currentEditId = null;
+let canWrite = false;   // 写操作仅超管 / 教务（与后端 require_roles 一致）
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('classes')) return;
+  const user = await boot('classes');
+  if (!user) return;
+
+  canWrite = canManageAcademic(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   fillSelects();
 
@@ -68,8 +73,9 @@ function renderTable() {
       <td class="td-sub">${esc(c.startDate)}<br>${esc(c.endDate || '—')}</td>
       <td>${badge(c.status)}</td>
       <td class="td-actions">
+        ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${c.id}">${ICONS.edit}编辑</button>
-        <button class="btn-link danger" data-act="del" data-id="${c.id}">${ICONS.trash}删除</button>
+        <button class="btn-link danger" data-act="del" data-id="${c.id}">${ICONS.trash}删除</button>` : ''}
       </td>
     </tr>`;
   }).join('') : emptyRow(10, '没有符合条件的班级');

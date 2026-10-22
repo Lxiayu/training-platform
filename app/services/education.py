@@ -95,7 +95,15 @@ class StudentService(CrudService):
             data["enrollDate"] = today()
         if not data.get("status"):
             data["status"] = db.settings.get("newStudentStatus") or "在读"
-        return super().create(data)
+        rec = super().create(data)
+        # 报名即生成应收账单（家长端「应缴」口径）；失败不阻断报名
+        from app.services.finance import BillService
+
+        try:
+            BillService().create_for_student(rec)
+        except BizException:
+            pass
+        return rec
 
     def delete(self, code: str) -> None:
         """删除学员并级联软删其全部缴费记录（同一数据库事务内完成）。"""

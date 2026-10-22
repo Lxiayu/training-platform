@@ -89,6 +89,7 @@ async function hydrate() {
     }
   };
   const fetchConf = async () => {
+    if (!staff) return { org: {}, settings: {} };   // /settings 仅员工可读（后端已收紧），门户身份直接跳过
     try {
       return await api.settingsGet();
     } catch (e) {
@@ -166,7 +167,8 @@ const BADGE_MAP = {
   '已支付': 'success', '待确认': 'warning', '已退款': 'danger', '已作废': 'gray',
   '启用': 'success', '禁用': 'danger', '已发布': 'success', '草稿': 'gray',
   '未提交': 'warning', '已提交': 'info', '已批改': 'success',
-  '出勤': 'success', '迟到': 'warning', '请假': 'info', '缺勤': 'danger'
+  '出勤': 'success', '迟到': 'warning', '请假': 'info', '缺勤': 'danger',
+  '待缴': 'warning', '部分缴': 'info', '已缴': 'success', '已逾期': 'danger'
 };
 function badge(text) { return `<span class="badge badge-${BADGE_MAP[text] || 'gray'}">${esc(text)}</span>`; }
 function emptyRow(cols, text = '暂无数据') {
@@ -219,7 +221,7 @@ const NAV_GROUPS = [
   { title: '系 统', items: [
     { key: 'users',    label: '用户管理', icon: 'usercog', href: 'users.html', adminOnly: true },
     { key: 'profile',  label: '个人信息', icon: 'idcard',  href: 'profile.html' },
-    { key: 'settings', label: '系统设置', icon: 'gear',    href: 'settings.html' }
+    { key: 'settings', label: '系统设置', icon: 'gear',    href: 'settings.html', adminOnly: true }
   ]}
 ];
 const PAGE_TITLES = {
@@ -246,11 +248,26 @@ const PORTAL_NAV_GROUPS = [
 const STAFF_PAGES = new Set(['dashboard', 'courses', 'classes', 'teachers', 'students', 'payments', 'users', 'settings']);
 
 /* 仅超级管理员可见的页面：非管理员（含教务 / 财务 / 前台）访问会被重定向到工作台 */
-const ADMIN_PAGES = new Set(['users']);
+const ADMIN_PAGES = new Set(['users', 'settings']);
 
 function isAdmin(user) { return !!user && user.role === '超级管理员'; }
 function isStaff(user) { return !!user && user.identity === 'staff'; }
 function navGroupsFor(user) { return isStaff(user) ? NAV_GROUPS : PORTAL_NAV_GROUPS; }
+
+/* ---------- 角色权限矩阵（《02-总体设计》§4.3，与后端 require_roles 同源） ----------
+ * 服务端 403 才是安全边界；这里仅做入口隐藏 / 按钮禁用的体验优化。
+ * -------------------------------------------------------------------------- */
+function hasRole(user, ...roles) { return !!user && isStaff(user) && roles.includes(user.role); }
+// 教师 / 课程 / 班级管理（写）：超管 + 教务
+function canManageAcademic(user) { return hasRole(user, '超级管理员', '教务管理员'); }
+// 学员管理（写 = 报名）：超管 + 教务 + 前台
+function canEnrollStudent(user) { return hasRole(user, '超级管理员', '教务管理员', '前台接待'); }
+// 缴费管理（登记 / 确认 / 作废 / 删除）：超管 + 财务
+function canManageFinance(user) { return hasRole(user, '超级管理员', '财务专员'); }
+// 新闻发布：超管 + 教务
+function canPublishNews(user) { return hasRole(user, '超级管理员', '教务管理员'); }
+// 课件资源（上传 / 编辑 / 删除）：超管 + 教务 + 教师岗
+function canManageResource(user) { return hasRole(user, '超级管理员', '教务管理员', '教师'); }
 
 /* 身份元数据：用于顶栏徽章与门户区分 */
 const IDENTITY_META = {

@@ -1,7 +1,8 @@
 """缴费管理路由（含统计与状态流转）。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user, require_staff
+from app.core.config import ROLE_ADMIN, ROLE_FINANCE
+from app.core.deps import require_roles, require_staff
 from app.core.response import ok
 from app.api.pagination import Pagination
 from app.schemas import PaymentCreate, PaymentUpdate
@@ -38,26 +39,26 @@ def get_payment(code: str, _user: dict = Depends(require_staff)):
 
 
 @router.post("")
-def create_payment(body: PaymentCreate, _user: dict = Depends(require_staff)):
+def create_payment(body: PaymentCreate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_FINANCE))):
     return ok(payment_service.create(body.model_dump(by_alias=True)))
 
 
 @router.put("/{code}")
-def update_payment(code: str, body: PaymentUpdate, _user: dict = Depends(require_staff)):
+def update_payment(code: str, body: PaymentUpdate, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_FINANCE))):
     return ok(payment_service.update(code, body.model_dump(by_alias=True, exclude_unset=True)))
 
 
 @router.delete("/{code}")
-def delete_payment(code: str, _user: dict = Depends(require_staff)):
+def delete_payment(code: str, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_FINANCE))):
     payment_service.delete(code)
     return ok(None, "删除成功")
 
 
 @router.post("/{code}/confirm")
-def confirm_payment(code: str, _user: dict = Depends(require_staff)):
+def confirm_payment(code: str, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_FINANCE))):
     return ok(payment_service.confirm(code), "确认收款成功")
 
 
 @router.post("/{code}/void")
-def void_payment(code: str, _user: dict = Depends(require_staff)):
+def void_payment(code: str, _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_FINANCE))):
     return ok(payment_service.void(code), "作废成功")

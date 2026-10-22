@@ -4,9 +4,14 @@
  * ============================================================ */
 
 let currentEditId = null;
+let canWrite = false;   // 写操作仅超管 / 教务（与后端 require_roles 一致）
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('teachers')) return;
+  const user = await boot('teachers');
+  if (!user) return;
+
+  canWrite = canManageAcademic(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   $('#kw').addEventListener('input', renderTable);
   $('#f-subject').addEventListener('change', renderTable);
@@ -52,8 +57,9 @@ function renderTable() {
       <td class="td-sub">${esc(t.hireDate)}</td>
       <td>${badge(t.status)}</td>
       <td class="td-actions">
+        ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${t.id}">${ICONS.edit}编辑</button>
-        <button class="btn-link danger" data-act="del" data-id="${t.id}">${ICONS.trash}删除</button>
+        <button class="btn-link danger" data-act="del" data-id="${t.id}">${ICONS.trash}删除</button>` : ''}
       </td>
     </tr>`).join('') : emptyRow(9, '没有符合条件的教师');
 }

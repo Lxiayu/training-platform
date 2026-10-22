@@ -371,10 +371,12 @@ async function initStudent(el) {
   ]);
   el.insertAdjacentHTML('beforeend', studentStatsHtml());
   el.insertAdjacentHTML('beforeend', studentInfoHtml());
+  el.insertAdjacentHTML('beforeend', `<div id="student-pay" style="margin-top:16px">${payLoadingCard('缴费明细')}</div>`);
   el.insertAdjacentHTML('beforeend', studentAssignmentsHtml(assignments));
   el.insertAdjacentHTML('beforeend', studentAttendanceHtml(attendance));
   $('#student-assignments')?.addEventListener('click', onStudentAssignmentAction);
   window.__studentAssignments = assignments;
+  await loadStudentPayments();
 }
 
 function studentStatsHtml() {
@@ -520,6 +522,18 @@ async function refreshStudent() {
   if (tbody) tbody.innerHTML = studentAssignmentRows(assignments);
 }
 
+/* ---------- 学员：缴费详情 ---------- */
+
+async function loadStudentPayments() {
+  const box = $('#student-pay');
+  if (!box) return;
+  try {
+    box.innerHTML = paySection(await api.portalStudentPayments(), { title: '缴费明细' });
+  } catch (e) {
+    box.innerHTML = payErrorCard(e);
+  }
+}
+
 /* ============================================================
  * 家长
  * ============================================================ */
@@ -532,6 +546,7 @@ async function initParent(el) {
   ]);
   el.insertAdjacentHTML('beforeend', parentStatsHtml());
   el.insertAdjacentHTML('beforeend', parentChildrenHtml());
+  el.insertAdjacentHTML('beforeend', parentPaymentsHtml());
   el.insertAdjacentHTML('beforeend', parentAssignmentsHtml());
   el.insertAdjacentHTML('beforeend', parentAttendanceHtml());
   $('#parent-assign-filter')?.addEventListener('change', e => {
@@ -542,6 +557,7 @@ async function initParent(el) {
     parentChildFilter = e.target.value;
     renderParentAttendance();
   });
+  initParentPayments();
 }
 
 function parentStatsHtml() {
@@ -578,7 +594,7 @@ function parentChildrenHtml() {
 function childFilterHtml(id) {
   return `<select class="select" id="${id}" style="width:180px">
     <option value="">全部学员</option>
-    ${CHILDREN.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+    ${CHILDREN.map(c => `<option value="${esc(c.studentId)}">${esc(c.name)}</option>`).join('')}
   </select>`;
 }
 
@@ -650,6 +666,128 @@ function parentAttendanceRows() {
 function renderParentAttendance() {
   const tbody = $('#parent-attendance');
   if (tbody) tbody.innerHTML = parentAttendanceRows();
+}
+
+/* ---------- 家长 / 学员：缴费明细组件 ---------- */
+
+function parentPaymentsHtml() {
+  if (!CHILDREN.length) return emptyState('warn', '暂无关联学员', '请联系机构绑定家长账号');
+  const tabs = CHILDREN.length > 1 ? `
+    <div class="child-tabs reveal" data-d="2" id="child-tabs" style="margin-top:16px">
+      ${CHILDREN.map((k, i) => `<button type="button" class="child-tab ${i === 0 ? 'active' : ''}" data-child="${esc(k.studentId)}">${esc(k.name)}</button>`).join('')}
+    </div>` : '';
+  return tabs + `<div id="parent-pay" style="margin-top:16px">${payLoadingCard('缴费明细')}</div>`;
+}
+
+function initParentPayments() {
+  if (!CHILDREN.length) return;
+  let current = CHILDREN[0].studentId;
+  const box = $('#parent-pay');
+  if (box) box.dataset.child = current;
+
+  $$('#child-tabs .child-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.child === current) return;
+      current = btn.dataset.child;
+      $$('#child-tabs .child-tab').forEach(b => b.classList.toggle('active', b === btn));
+      loadParentPayments(current);
+    });
+  });
+
+  loadParentPayments(current);
+}
+
+async function loadParentPayments(studentId) {
+  const box = $('#parent-pay');
+  if (!box) return;
+  box.dataset.child = studentId; // 先登记目标，避免快速切换时旧响应覆盖新内容
+  box.innerHTML = payLoadingCard('缴费明细');
+  try {
+    const data = await api.portalParentPayments(studentId);
+    if (box.dataset.child !== studentId) return;
+    box.innerHTML = paySection(data, { title: '缴费明细' });
+  } catch (e) {
+    if (box.dataset.child !== studentId) return;
+    box.innerHTML = payErrorCard(e);
+  }
+}
+
+function payLoadingCard(title) {
+  return `<div class="card reveal"><div class="card-head"><div class="card-title">${ICONS.wallet} ${esc(title)}</div></div>
+    <div class="card-body">${skeleton(3)}</div></div>`;
+}
+
+function payErrorCard(e) {
+  return `<div class="card reveal"><div class="card-body">${emptyState('warn', '缴费明细加载失败', e.message || '请稍后重试')}</div></div>`;
+}
+
+function paySection(data, { title = '缴费明细' } = {}) {
+  const s = data.summary || {};
+  const bills = data.bills || [];
+  const pays = data.payments || [];
+  const stu = data.student || {};
+  const sub = [stu.className, stu.courseName].filter(Boolean).join(' · ');
+
+  const summary = `
+    <div class="pay-summary">
+      ${payCell('应缴', money(s.dueTotal))}
+      ${payCell('已缴', money(s.paidTotal), 'success')}
+      ${payCell('待确认', money(s.pendingTotal), 'warning')}
+      ${payCell('欠费', money(s.outstanding), s.outstanding > 0 ? 'danger' : 'success')}
+    </div>`;
+
+  const billRows = bills.map(b => `
+    <tr>
+      <td>${esc(b.period || '–')}</td>
+      <td>${esc(b.courseName || '–')}${b.className ? `<div class="pay-sub">${esc(b.className)}</div>` : ''}</td>
+      <td style="text-align:right">${money(b.amount)}</td>
+      <td style="text-align:right">${money(b.paidAmount)}</td>
+      <td>${badge(b.displayStatus || b.status || '–')}</td>
+      <td>${esc(b.dueDate || '–')}</td>
+      <td>${esc(b.note || '–')}</td>
+    </tr>`).join('') || emptyRow(7, '暂无账单');
+
+  const billTable = `
+    <div class="section-label">应收账单</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>账期</th><th>课程 / 班级</th><th>应缴</th><th>已缴</th><th>状态</th><th>到期日</th><th>备注</th></tr></thead>
+      <tbody>${billRows}</tbody>
+    </table></div>`;
+
+  const payRows = pays.map(p => `
+    <tr>
+      <td>${esc(p.date || '–')}</td>
+      <td style="text-align:right">${money(p.amount)}</td>
+      <td>${esc(p.method || '–')}</td>
+      <td>${badge(p.status || '–')}</td>
+      <td>${esc(p.billId || '历史流水')}</td>
+      <td>${esc(p.note || '–')}</td>
+    </tr>`).join('') || emptyRow(6, '暂无缴费记录');
+
+  const payTable = `
+    <div class="section-label">缴费流水</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>日期</th><th>金额</th><th>方式</th><th>状态</th><th>关联账单</th><th>备注</th></tr></thead>
+      <tbody>${payRows}</tbody>
+    </table></div>`;
+
+  return `<div class="card reveal">
+    <div class="card-head">
+      <div class="card-title">${ICONS.wallet} ${esc(title)}</div>
+      ${sub ? `<div class="card-sub">${esc(sub)}</div>` : ''}
+    </div>
+    <div class="card-body">
+      ${summary}
+      ${bills.length ? '' : `<div class="pay-note">${ICONS.info}<span>暂无应收账单，以下为历史缴费流水；金额以机构账单为准。</span></div>`}
+      ${billTable}
+      ${payTable}
+    </div>
+  </div>`;
+}
+
+function payCell(label, value, tone = '') {
+  return `<div class="pay-cell"><div class="pay-k">${esc(label)}</div>
+    <div class="pay-v ${tone}">${esc(value)}</div></div>`;
 }
 
 /* ---------- 员工误入门户 ---------- */

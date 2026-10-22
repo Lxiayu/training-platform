@@ -4,9 +4,14 @@
  * ============================================================ */
 
 let currentEditId = null;
+let canWrite = false;   // 写操作（登记 / 确认 / 作废 / 删除）仅超管 / 财务（与后端 require_roles 一致）
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('payments')) return;
+  const user = await boot('payments');
+  if (!user) return;
+
+  canWrite = canManageFinance(user);
+  if (!canWrite) $('#btn-add').style.display = 'none';
 
   // 选择学员后，班级自动切换到该学员所在班级并带出课程价格
   $('#f-student').addEventListener('change', () => {
@@ -92,10 +97,11 @@ function renderTable() {
       <td class="td-sub">${esc(p.note || '—')}</td>
       <td>${badge(p.status)}</td>
       <td class="td-actions">
+        ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${p.id}">${ICONS.edit}编辑</button>
         ${p.status === '待确认' ? `<button class="btn-link success" data-act="confirm" data-id="${p.id}">${ICONS.check}确认</button>` : ''}
         ${p.status !== '已作废' && p.status !== '已退款' ? `<button class="btn-link danger" data-act="void" data-id="${p.id}">作废</button>` : ''}
-        <button class="btn-link danger" data-act="del" data-id="${p.id}">${ICONS.trash}删除</button>
+        <button class="btn-link danger" data-act="del" data-id="${p.id}">${ICONS.trash}删除</button>` : ''}
       </td>
     </tr>`;
   }).join('') : emptyRow(9, '没有符合条件的缴费记录');

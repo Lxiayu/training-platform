@@ -35,8 +35,7 @@ CRED = {
 
 @pytest.fixture(scope="module")
 def client():
-    if os.path.exists(_DB_FILE):
-        os.remove(_DB_FILE)
+    # 不要删除数据库文件：共享 engine 仍持有句柄，Windows 下 os.remove 会抛 WinError 32
     init_db()
     reset_schema()
     seed_db()

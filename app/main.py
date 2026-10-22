@@ -18,14 +18,21 @@ from app.core.exceptions import BizException
 from app.db.repository import db as repository
 from app.db.seed import seed_db
 from app.db.session import Base, init_db
+from app.services.finance import BillService
 import app.db.models  # noqa: F401  确保模型注册到 metadata
 
 
 def _ensure_db() -> None:
-    """建表并在空库时播种种子数据（uvicorn 启动与测试首次访问均会触发）。"""
+    """建表并在空库时播种种子数据（uvicorn 启动与测试首次访问均会触发）。
+
+    老库（v0.4）没有 `bills` 表数据：启动时按课程价补建应收账单，并把历史学费
+    流水挂到账单上，保证升级后家长端「应缴 / 已缴 / 欠费」立即可用。
+    """
     init_db()
     if repository.find("users", "admin") is None:
         seed_db()
+    else:
+        BillService().backfill()
 
 
 app = FastAPI(

@@ -23,6 +23,7 @@ from app.db.models import (
     Account,
     Assignment,
     Attendance,
+    Bill,
     Class,
     Config,
     Course,
@@ -44,6 +45,7 @@ MODELS: dict[str, type] = {
     "classes": Class,
     "students": Student,
     "payments": Payment,
+    "bills": Bill,           # 应收账单（缴费详情口径）
     "news": News,
     "resources": Resource,
     "assignments": Assignment,
@@ -59,6 +61,9 @@ _TRANSFORMS: dict[str, dict[str, tuple[Any, Any]]] = {
         "content": (lambda v: json.loads(v) if v else [], lambda v: json.dumps(v or [])),
     },
     "payments": {
+        "amount": (lambda v: float(v) if v is not None else 0.0, lambda v: float(v) if v is not None else 0.0),
+    },
+    "bills": {
         "amount": (lambda v: float(v) if v is not None else 0.0, lambda v: float(v) if v is not None else 0.0),
     },
 }
@@ -211,7 +216,7 @@ class DB:
             return _row_to_dict("users", acc) if acc is not None else None
 
     def soft_delete_student_cascade(self, code: str) -> None:
-        """删除学员并级联软删其全部缴费记录（同一数据库事务内完成）。"""
+        """删除学员并级联软删其全部缴费 / 账单记录（同一数据库事务内完成）。"""
         from app.core.config import now_iso
         from sqlalchemy import update as _sa_update
 
@@ -221,12 +226,13 @@ class DB:
             if stu is None or stu.deletedAt is not None:
                 raise BizException(404, "学员不存在或已被删除")
             stu.deletedAt = ts
-            # 批量软删该学员的全部缴费记录（避免逐条 ORM 迭代的刷写边界问题）
-            s.execute(
-                _sa_update(Payment)
-                .where(Payment.studentId == code, Payment.deletedAt.is_(None))
-                .values(deletedAt=ts)
-            )
+            # 批量软删该学员的全部缴费记录与应收账单（避免逐条 ORM 迭代的刷写边界问题）
+            for Model in (Payment, Bill):
+                s.execute(
+                    _sa_update(Model)
+                    .where(Model.studentId == code, Model.deletedAt.is_(None))
+                    .values(deletedAt=ts)
+                )
             s.commit()
 
     def list_children_of(self, parent_code: str) -> list[dict[str, Any]]:

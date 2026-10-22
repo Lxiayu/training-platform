@@ -5,10 +5,9 @@ from app.core.config import DEFAULT_USER_PASSWORD, IDENTITY_STAFF, now_iso
 from app.core.exceptions import BizException
 from app.core.security import create_token, hash_password, verify_password
 from app.db.repository import db
+from app.core.config import ROLE_ADMIN
 from app.services.base import CrudService, today
 from app.services.teaching import TeachingStatsService
-
-ROLE_ADMIN = "超级管理员"
 
 
 def public_user(user: dict) -> dict:

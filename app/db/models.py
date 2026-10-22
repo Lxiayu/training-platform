@@ -131,6 +131,30 @@ class Payment(Base):
     date = Column(String(32), nullable=True)
     status = Column(String(16), nullable=False, default="待确认")
     note = Column(String(256), nullable=True)
+    billId = Column(String(16), nullable=True)  # 关联应收账单（空 = 历史流水 / 教材费等非学费流水）
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+
+
+class Bill(Base):
+    """应收账单：家长端「应缴 / 已缴 / 欠费」的口径来源。
+
+    - 报名时按课程价自动生成（``BillService.create_for_student``）；
+    - 实收金额不落库，由 ``payments.billId`` 关联的「已支付」流水实时汇总，
+      避免账单与流水两套金额互相漂移；
+    - ``status`` 仅存「待缴 / 已作废」，部分缴 / 已缴 / 已逾期均为读取时派生。
+    """
+    __tablename__ = "bills"
+    id = Column(String(16), primary_key=True)  # 账单编号 ZD001
+    studentId = Column(String(16), nullable=False)
+    classId = Column(String(16), nullable=False)
+    courseId = Column(String(16), nullable=False)
+    period = Column(String(16), nullable=False, default="")   # 账期 YYYY-MM
+    amount = Column(Numeric(12, 2), nullable=False, default=0)
+    status = Column(String(16), nullable=False, default="待缴")  # 待缴 / 已作废
+    dueDate = Column(String(32), nullable=True)                 # 到期日 YYYY-MM-DD
+    note = Column(String(256), nullable=True)
     createdAt = Column(String(32), nullable=True)
     updatedAt = Column(String(32), nullable=True)
     deletedAt = Column(String(32), nullable=True)

@@ -10,6 +10,7 @@
 密码统一经 PBKDF2 哈希落库，绝不存明文。
 """
 from typing import Any
+from datetime import date, timedelta
 
 from app.core.config import DEFAULT_USER_PASSWORD, now_iso
 from app.core.security import hash_password
@@ -17,6 +18,7 @@ from app.db.models import (
     Account,
     Assignment,
     Attendance,
+    Bill,
     Class,
     Config,
     Course,
@@ -305,8 +307,34 @@ def seed_db() -> None:
             s.add(Class(**{**c, "createdAt": ts, "updatedAt": ts}))
         for st in _STUDENTS:
             s.add(Student(**{**st, "createdAt": ts, "updatedAt": ts}))
+
+        # 应收账单：每名学员一条，金额 = 班级课程价，账期 = 报名月，到期日 = 报名日 + 14 天；
+        # 已全额退费的学员（XS011）账单直接作废，避免家长端出现虚假欠费。
+        class_by_id = {c["id"]: c for c in _CLASSES}
+        course_by_id = {c["id"]: c for c in _COURSES}
+        bill_of_student: dict[str, str] = {}
+        for idx, st in enumerate(_STUDENTS, start=1):
+            cls = class_by_id[st["classId"]]
+            course = course_by_id[cls["courseId"]]
+            refunded = any(
+                p["studentId"] == st["id"] and p["status"] == "已退款" for p in _PAYMENTS
+            )
+            bill_id = f"ZD{idx:03d}"
+            bill_of_student[st["id"]] = bill_id
+            s.add(Bill(
+                id=bill_id, studentId=st["id"], classId=cls["id"], courseId=course["id"],
+                period=st["enrollDate"][:7], amount=course["price"],
+                status="已作废" if refunded else "待缴",
+                dueDate=(date.fromisoformat(st["enrollDate"]) + timedelta(days=14)).isoformat(),
+                note="报名学费（种子数据）", createdAt=ts, updatedAt=ts,
+            ))
+
+        # 缴费流水：学费 / 定金 / 分期挂到对应账单；教材费、报名费等留作历史流水
         for p in _PAYMENTS:
-            s.add(Payment(**{**p, "createdAt": ts, "updatedAt": ts}))
+            bill_id = bill_of_student.get(p["studentId"])
+            linked = bill_id and any(k in (p.get("note") or "") for k in ("学费", "定金", "分期"))
+            s.add(Payment(**{**p, "billId": bill_id if linked else None,
+                             "createdAt": ts, "updatedAt": ts}))
         for n in _NEWS:
             s.add(News(**{**n, "content": _json.dumps(n["content"], ensure_ascii=False),
                           "createdAt": ts, "updatedAt": ts}))

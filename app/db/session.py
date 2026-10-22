@@ -82,11 +82,31 @@ def get_session() -> Session:
     return SessionLocal()
 
 
+def _ensure_columns() -> None:
+    """轻量增量迁移：为 v0.4 已有库补 ``payments.billId``（本项目未引入 Alembic）。
+
+    ``create_all`` 只建缺失的表，不会给已存在的表加列；这里对 SQLite / MySQL
+    统一用 ``ALTER TABLE ... ADD COLUMN`` 幂等补齐，避免老库启动即报错。
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "payments" not in set(inspector.get_table_names()):
+        return
+    columns = {c["name"] for c in inspector.get_columns("payments")}
+    if "billId" in columns:
+        return
+    quote = '"' if engine.dialect.name == "sqlite" else "`"
+    with engine.begin() as conn:
+        conn.execute(text(f"ALTER TABLE payments ADD COLUMN {quote}billId{quote} VARCHAR(16)"))
+
+
 def init_db() -> None:
-    """建表（幂等）。"""
+    """建表（幂等），并补齐新增列。"""
     import app.db.models  # noqa: F401  确保模型已注册到 Base.metadata
 
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()
 
 
 def reset_schema() -> None:

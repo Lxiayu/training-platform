@@ -44,3 +44,12 @@ IDENTITY_TEACHER = "teacher"    # 教师门户
 IDENTITY_STUDENT = "student"    # 学员门户
 IDENTITY_PARENT = "parent"      # 家长门户
 IDENTITIES = (IDENTITY_STAFF, IDENTITY_TEACHER, IDENTITY_STUDENT, IDENTITY_PARENT)
+
+# 员工（staff）职务角色：users.role 取值，即《02-总体设计》§4.3 权限矩阵的列维度。
+# require_roles 据此在接口层做细粒度授权；前端按同一矩阵隐藏入口（仅体验优化）。
+ROLE_ADMIN = "超级管理员"        # 全部模块，含用户管理 / 系统设置
+ROLE_ACADEMIC = "教务管理员"     # 教师 / 课程 / 班级 / 学员写操作、新闻发布、资源管理
+ROLE_FINANCE = "财务专员"        # 缴费写操作（登记 / 确认 / 作废 / 删除）
+ROLE_FRONTDESK = "前台接待"      # 学员报名（学员写操作）
+ROLE_TEACHER = "教师"            # 员工教师岗（staff 身份）：课件资源上传
+STAFF_ROLES = (ROLE_ADMIN, ROLE_ACADEMIC, ROLE_FINANCE, ROLE_FRONTDESK, ROLE_TEACHER)

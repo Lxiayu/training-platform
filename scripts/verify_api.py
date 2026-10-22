@@ -15,7 +15,11 @@ import tempfile
 from pathlib import Path
 
 # 必须在导入 app 之前设置独立数据库（SQLite 临时文件，不污染 data/app.db）
-_DB_FILE = Path(tempfile.mkdtemp(prefix="qihang-verify-")) / "verify.sqlite"
+# 直接落在临时目录下（不建子目录）：受限沙箱里新建子目录可能拿不到写权限，
+# 导致 SQLite「unable to open database file」。
+_fd, _db_path = tempfile.mkstemp(prefix="qihang-verify-", suffix=".sqlite")
+os.close(_fd)
+_DB_FILE = Path(_db_path)
 os.environ["QIHANG_DB_URL"] = f"sqlite:///{_DB_FILE}"
 
 # 项目根目录加入模块搜索路径（支持从任意目录运行）
@@ -444,6 +448,89 @@ def scenario_align(admin_token: str, jw_token: str):
     check("重置后管理员仍可正常使用", r.status_code == 200 and data_of(r.json())["total"] == 5)
 
 
+# ---------------------------------------------------------------- 角色权限矩阵
+
+def scenario_permissions(admin_token: str):
+    """《02-总体设计》§4.3 角色权限矩阵：员工分岗 + 防提权（放在最后，避免污染计数断言）。"""
+    print("== 角色权限矩阵（§4.3） ==")
+
+    def tok(u: str, p: str) -> str:
+        r = login(u, p)
+        assert r.status_code == 200, f"{u} 登录失败: {r.text}"
+        return data_of(r.json())["token"]
+
+    jw = tok("jiaowu", "123456")
+    cw = tok("caiwu", "123456")
+    qt = tok("qiantai", "123456")
+    st = tok("XS001", "123456")
+
+    # 教务：教务域写 ✓ / 缴费 ✗ / 用户与设置 ✗
+    r = client.post("/api/v1/teachers", headers=auth(jw),
+                    json={"name": "矩阵教师", "gender": "女", "phone": "13900000088", "subject": "Python"})
+    check("教务可新增教师", r.status_code == 200)
+    jw_teacher_id = data_of(r.json())["id"] if r.status_code == 200 else None
+    r = client.post("/api/v1/payments", headers=auth(jw),
+                    json={"studentId": "XS001", "classId": "BJ001", "amount": 100, "method": "现金"})
+    check("教务登记缴费 -> 403", r.status_code == 403)
+    check("教务访问用户管理 -> 403", client.get("/api/v1/users", headers=auth(jw)).status_code == 403)
+    r = client.put("/api/v1/settings", headers=auth(jw), json={"newStudentStatus": "在读"})
+    check("教务修改系统设置 -> 403", r.status_code == 403)
+
+    # 财务：缴费写 ✓ / 教务域写 ✗
+    r = client.post("/api/v1/payments", headers=auth(cw),
+                    json={"studentId": "XS001", "classId": "BJ001", "amount": 100, "method": "现金"})
+    check("财务登记缴费（默认待确认）", r.status_code == 200 and data_of(r.json())["status"] == "待确认")
+    pay_id = data_of(r.json())["id"] if r.status_code == 200 else None
+    if pay_id:
+        check("财务确认收款", client.post(f"/api/v1/payments/{pay_id}/confirm", headers=auth(cw)).status_code == 200)
+    check("财务新增学员 -> 403", client.post("/api/v1/students", headers=auth(cw), json={
+        "name": "x", "gender": "男", "grade": "一年级", "parent": "p", "parentPhone": "15800000001", "classId": "BJ001",
+    }).status_code == 403)
+    if jw_teacher_id:
+        check("财务删除教师 -> 403", client.delete(f"/api/v1/teachers/{jw_teacher_id}", headers=auth(cw)).status_code == 403)
+
+    # 前台：学员报名写 ✓ / 缴费与课程写 ✗
+    r = client.post("/api/v1/students", headers=auth(qt), json={
+        "name": "前台报名学员", "gender": "女", "grade": "二年级", "parent": "前台家长", "parentPhone": "15800000002", "classId": "BJ001",
+    })
+    check("前台报名学员", r.status_code == 200)
+    check("前台登记缴费 -> 403", client.post("/api/v1/payments", headers=auth(qt), json={
+        "studentId": "XS001", "classId": "BJ001", "amount": 100, "method": "现金",
+    }).status_code == 403)
+    check("前台新增课程 -> 403", client.post("/api/v1/courses", headers=auth(qt), json={
+        "name": "x", "category": "Scratch", "level": "入门", "hours": 8, "price": 100,
+    }).status_code == 403)
+
+    # 教师岗（staff 身份 + 教师职务）：资源上传 ✓ / 其他写 ✗
+    check("管理员启用教师岗账号", client.put("/api/v1/users/wangzq", headers=auth(admin_token),
+                                             json={"status": "启用"}).status_code == 200)
+    wz = tok("wangzq", "123456")
+    r = client.post("/api/v1/resources", headers=auth(wz), json={"title": "教师岗课件", "type": "课件PPT", "courseId": "KC001", "teacherId": "JS001"})
+    check("教师岗上传课件", r.status_code == 200)
+    wz_res_id = data_of(r.json())["id"] if r.status_code == 200 else None
+    check("教师岗新增学员 -> 403", client.post("/api/v1/students", headers=auth(wz), json={
+        "name": "x", "gender": "男", "grade": "一年级", "parent": "p", "parentPhone": "15800000003", "classId": "BJ001",
+    }).status_code == 403)
+    check("教师岗登记缴费 -> 403", client.post("/api/v1/payments", headers=auth(wz), json={
+        "studentId": "XS001", "classId": "BJ001", "amount": 100, "method": "现金",
+    }).status_code == 403)
+    client.put("/api/v1/users/wangzq", headers=auth(admin_token), json={"status": "禁用"})
+
+    # 防提权：学员（门户身份）直接打后台接口 -> 403
+    check("学员直接报名 -> 403", client.post("/api/v1/students", headers=auth(st), json={
+        "name": "x", "gender": "男", "grade": "一年级", "parent": "p", "parentPhone": "15800000004", "classId": "BJ001",
+    }).status_code == 403)
+    check("学员删除缴费 -> 403", client.delete("/api/v1/payments/JF001", headers=auth(st)).status_code == 403)
+    check("学员拉取用户列表 -> 403", client.get("/api/v1/users", headers=auth(st)).status_code == 403)
+    check("学员读取系统设置 -> 403", client.get("/api/v1/settings", headers=auth(st)).status_code == 403)
+
+    # 清理本场景自建数据
+    if jw_teacher_id:
+        client.delete(f"/api/v1/teachers/{jw_teacher_id}", headers=auth(jw))
+    if wz_res_id:
+        client.delete(f"/api/v1/resources/{wz_res_id}", headers=auth(admin_token))
+
+
 def main() -> int:
     global client
     with TestClient(app) as client:
@@ -455,6 +542,7 @@ def main() -> int:
         scenario_news_resources(admin_token)
         scenario_settings_users(admin_token, jw_token)
         scenario_align(admin_token, jw_token)
+        scenario_permissions(admin_token)
 
     total = PASSED + len(FAILED)
     print(f"\n===== 冒烟验证：{PASSED}/{total} 通过 =====")

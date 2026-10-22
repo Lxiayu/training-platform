@@ -1,7 +1,7 @@
 """系统设置路由。"""
 from fastapi import APIRouter, Depends
 
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import require_admin, require_staff
 from app.core.response import ok
 from app.schemas import SettingsUpdate
 from app.services.platform import SettingsService
@@ -11,7 +11,8 @@ settings_service = SettingsService()
 
 
 @router.get("")
-def get_settings(_user: dict = Depends(get_current_user)):
+def get_settings(_user: dict = Depends(require_staff)):
+    """机构信息与业务开关仅员工可读（后台页面展示用）；学员 / 教师 / 家长 403。"""
     return ok(settings_service.get())
 
 

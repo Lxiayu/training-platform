@@ -105,6 +105,60 @@ class Class(Base):
     deletedAt = Column(String(32), nullable=True)
 
 
+class ClassSchedule(Base):
+    """排课规则：一个班级可有多条（如周一/三/五各一条），用于生成具体课次。
+
+    - ``weekday`` 用 ISO 口径：1=周一 … 7=周日；
+    - ``effectiveFrom / effectiveTo`` 界定规则生效区间（默认取班级起止日期）；
+    - 课次由规则 + 日期区间幂等生成，规则改动只影响未来未上课课次。
+    """
+    __tablename__ = "class_schedules"
+    id = Column(String(16), primary_key=True)          # 规则编号 PB001
+    classId = Column(String(16), nullable=False, index=True)
+    weekday = Column(Integer, nullable=False)           # 1-7
+    startTime = Column(String(8), nullable=False)       # HH:MM
+    endTime = Column(String(8), nullable=False)         # HH:MM
+    effectiveFrom = Column(String(32), nullable=True)   # YYYY-MM-DD
+    effectiveTo = Column(String(32), nullable=True)
+    classroom = Column(String(32), nullable=True)
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+
+
+class ClassSession(Base):
+    """课次：某一班级在某个具体日期的某一节课。
+
+    - 作业 / 请假 / 考勤的挂载点；
+    - ``status``：待上课 / 已上课 / 已取消 / 已调课；
+    - 调课保留原课次（标记「已调课」并指向新课次），新课次用
+      ``originalDate / originalStartTime / originalEndTime`` 记录原时间，可追溯；
+    - ``source``：auto（规则生成，可被重新生成清理）/ manual（人工调课等，永不清除）。
+    """
+    __tablename__ = "class_sessions"
+    id = Column(String(16), primary_key=True)           # 课次编号 SK001
+    classId = Column(String(16), nullable=False, index=True)
+    teacherId = Column(String(16), nullable=False, index=True)
+    sessionDate = Column(String(32), nullable=False, index=True)   # YYYY-MM-DD
+    startTime = Column(String(8), nullable=False)
+    endTime = Column(String(8), nullable=False)
+    classroom = Column(String(32), nullable=True)
+    topic = Column(String(128), nullable=True)
+    status = Column(String(16), nullable=False, default="待上课")
+    source = Column(String(8), nullable=False, default="auto")
+    rescheduledFrom = Column(String(16), nullable=True)  # 新 → 原课次编号
+    rescheduledTo = Column(String(16), nullable=True)    # 原 → 新课次编号
+    originalDate = Column(String(32), nullable=True)
+    originalStartTime = Column(String(8), nullable=True)
+    originalEndTime = Column(String(8), nullable=True)
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("classId", "sessionDate", "startTime", name="uk_session_class_date_time"),
+    )
+
+
 class Student(Base):
     __tablename__ = "students"
     id = Column(String(16), primary_key=True)  # 学号 XS001
@@ -206,14 +260,20 @@ class StudentParent(Base):
 
 
 class Assignment(Base):
-    """作业：教师面向某个班级布置，学生提交后由教师批改。"""
+    """作业：教师面向某个班级布置，学生提交后由教师批改。
+
+    - ``sessionId`` 可选关联具体课次（未关联则为班级级作业）；
+    - ``allowLate`` 控制截止后是否仍可提交（默认不允许）。
+    """
     __tablename__ = "assignments"
     id = Column(String(16), primary_key=True)  # 作业编号 HW001
     classId = Column(String(16), nullable=False, index=True)
     teacherId = Column(String(16), nullable=False, index=True)
+    sessionId = Column(String(16), nullable=True, index=True)  # 关联课次（可空）
     title = Column(String(128), nullable=False)
     content = Column(Text, nullable=True)
     dueDate = Column(String(32), nullable=True)
+    allowLate = Column(Boolean, nullable=False, default=False)
     status = Column(String(16), nullable=False, default="进行中")  # 进行中 / 已结束
     createdAt = Column(String(32), nullable=True)
     updatedAt = Column(String(32), nullable=True)
@@ -221,18 +281,23 @@ class Assignment(Base):
 
 
 class Submission(Base):
-    """作业提交与批改：一份作业每个学员至多一条提交记录（可修改后重新提交）。"""
+    """作业提交与批改：一份作业每个学员至多一条提交记录（可修改后重新提交）。
+
+    - 已批改的提交不可直接修改，需教师「退回」后学员才能重新提交；
+    - ``returnReason`` 记录退回理由（退回后原成绩作废，留痕可追溯）。
+    """
     __tablename__ = "submissions"
     id = Column(String(16), primary_key=True)  # 提交编号 TJ001
     assignmentId = Column(String(16), nullable=False, index=True)
     studentId = Column(String(16), nullable=False, index=True)
     content = Column(Text, nullable=True)
     submittedAt = Column(String(32), nullable=True)
-    status = Column(String(16), nullable=False, default="已提交")  # 已提交 / 已批改
+    status = Column(String(16), nullable=False, default="已提交")  # 已提交 / 已批改 / 已退回
     score = Column(Integer, nullable=True)       # 0-100
     comment = Column(Text, nullable=True)
     gradedAt = Column(String(32), nullable=True)
     gradedBy = Column(String(32), nullable=True)
+    returnReason = Column(String(256), nullable=True)
     createdAt = Column(String(32), nullable=True)
     updatedAt = Column(String(32), nullable=True)
     deletedAt = Column(String(32), nullable=True)
@@ -256,24 +321,4 @@ class Attendance(Base):
     deletedAt = Column(String(32), nullable=True)
     __table_args__ = (
         UniqueConstraint("classId", "studentId", "date", name="uk_attendance_class_student_date"),
-    )
-
-
-class ClassSession(Base):
-    """课次（课表条目）：由班级的周排课规则自动生成，也可单独调整。"""
-    __tablename__ = "class_sessions"
-    id = Column(String(16), primary_key=True)  # 课次编号 SK001
-    classId = Column(String(16), nullable=False, index=True)
-    teacherId = Column(String(16), nullable=False, index=True)
-    date = Column(String(32), nullable=False, index=True)
-    startTime = Column(String(8), nullable=False)   # HH:MM
-    endTime = Column(String(8), nullable=False)     # HH:MM
-    classroom = Column(String(32), nullable=True)
-    topic = Column(String(128), nullable=True)
-    status = Column(String(16), nullable=False, default="待上课")  # 待上课/已完成/已取消
-    createdAt = Column(String(32), nullable=True)
-    updatedAt = Column(String(32), nullable=True)
-    deletedAt = Column(String(32), nullable=True)
-    __table_args__ = (
-        UniqueConstraint("classId", "date", "startTime", name="uk_session_class_date_start"),
     )

@@ -73,6 +73,7 @@ function renderTable() {
       <td class="td-sub">${esc(c.startDate)}<br>${esc(c.endDate || '—')}</td>
       <td>${badge(c.status)}</td>
       <td class="td-actions">
+        <button class="btn-link" data-act="schedule" data-id="${c.id}">${ICONS.calendar}排课</button>
         ${canWrite ? `
         <button class="btn-link" data-act="edit" data-id="${c.id}">${ICONS.edit}编辑</button>
         <button class="btn-link danger" data-act="del" data-id="${c.id}">${ICONS.trash}删除</button>` : ''}
@@ -91,6 +92,8 @@ function onTableClick(e) {
 
   if (act === 'edit') {
     openEditor(c);
+  } else if (act === 'schedule') {
+    openScheduleManager(c, canWrite);
   } else if (act === 'del') {
     // 是否仍有学员等业务校验由后端执行（冲突返回 409 并提示原因）
     askConfirm('删除班级', `确定删除班级「${c.name}」吗？删除后不可恢复。`, async () => {

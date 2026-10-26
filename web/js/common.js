@@ -166,9 +166,9 @@ const BADGE_MAP = {
   '未开班': 'warning', '进行中': 'success', '已结束': 'gray',
   '已支付': 'success', '待确认': 'warning', '已退款': 'danger', '已作废': 'gray',
   '启用': 'success', '禁用': 'danger', '已发布': 'success', '草稿': 'gray',
-  '未提交': 'warning', '已提交': 'info', '已批改': 'success',
+  '未提交': 'warning', '已提交': 'info', '已批改': 'success', '已退回': 'danger',
   '出勤': 'success', '迟到': 'warning', '请假': 'info', '缺勤': 'danger',
-  '待上课': 'primary', '已完成': 'success', '已取消': 'gray', '待考勤': 'warning',
+  '待上课': 'info', '已上课': 'success', '已完成': 'success', '已取消': 'gray', '已调课': 'warning', '待考勤': 'warning',
   '待缴': 'warning', '部分缴': 'info', '已缴': 'success', '已逾期': 'danger'
 };
 function badge(text) { return `<span class="badge badge-${BADGE_MAP[text] || 'gray'}">${esc(text)}</span>`; }
@@ -314,7 +314,7 @@ function renderLayout(pageKey) {
         `).join('')}`;
       }).join('')}
     </nav>
-    <div class="sidebar-foot">启航编程管理系统 v0.4<br>演示版 · 前后端联调</div>`;
+    <div class="sidebar-foot">启航编程管理系统 v0.5<br>演示版 · 前后端联调</div>`;
 
   $('#topbar').innerHTML = `
     <button class="icon-btn hamburger" id="btn-menu" title="菜单">${ICONS.menu}</button>

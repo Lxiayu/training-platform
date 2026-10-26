@@ -15,6 +15,7 @@ from app.api import (
     students,
     teachers,
     teaching,
+    timetable,
     users,
 )
 
@@ -26,13 +27,14 @@ for module_router in (
     teachers.router,
     courses.router,
     classes.router,
+    schedule.router,
     students.router,
     payments.router,
     news.router,
     resources.router,
     dashboard.router,
     portal.router,
-    schedule.router,
+    timetable.router,
     teaching.router,
     settings.router,
 ):

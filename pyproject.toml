@@ -1,6 +1,6 @@
 [project]
 name = "training-platform"
-version = "0.4.0"
+version = "0.5.0"
 description = "编程培训管理平台 - 培训机构一站式管理后端服务（SQLAlchemy 数据库版）"
 requires-python = ">=3.10"
 dependencies = [

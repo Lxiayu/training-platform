@@ -9,7 +9,14 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.deps import require_parent, require_student, require_teacher
 from app.core.response import ok
-from app.schemas import AssignmentCreate, AssignmentUpdate, AttendanceSave, GradeRequest, SubmissionCreate
+from app.schemas import (
+    AssignmentCreate,
+    AssignmentUpdate,
+    AttendanceSave,
+    GradeRequest,
+    ReturnRequest,
+    SubmissionCreate,
+)
 from app.services.teaching import AssignmentService, AttendanceService
 
 router = APIRouter(prefix="/portal", tags=["作业与考勤"])
@@ -55,6 +62,12 @@ def grade_submission(code: str, body: GradeRequest, user: dict = Depends(require
     return ok(assignment_service.grade(user["refId"], code, body.score, body.comment), "批改成功")
 
 
+@router.post("/teacher/submissions/{code}/return")
+def return_submission(code: str, body: ReturnRequest, user: dict = Depends(require_teacher)):
+    """退回已批改的提交（原成绩作废，学员可重新提交）。"""
+    return ok(assignment_service.return_submission(user["refId"], code, body.reason), "已退回学员重做")
+
+
 # ---------- 教师：考勤 ----------
 
 @router.get("/teacher/attendance")
@@ -70,6 +83,16 @@ def teacher_attendance(
 def save_attendance(body: AttendanceSave, user: dict = Depends(require_teacher)):
     items = [item.model_dump(by_alias=True) for item in body.items]
     return ok(attendance_service.save(user["refId"], body.class_id, body.date, items), "考勤已保存")
+
+
+@router.get("/teacher/attendance/summary")
+def teacher_attendance_summary(
+    classId: str = Query(...),
+    month: str | None = Query(default=None),
+    user: dict = Depends(require_teacher),
+):
+    """班级考勤统计：按学员汇总出勤 / 迟到 / 请假 / 缺勤与出勤率。"""
+    return ok(attendance_service.class_summary(user["refId"], classId, month))
 
 
 # ---------- 学员 ----------

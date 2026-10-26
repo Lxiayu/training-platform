@@ -186,6 +186,9 @@ const api = {
   gradeSubmission(id, score, comment) {
     return request('POST', '/portal/teacher/submissions/' + encodeURIComponent(id) + '/grade', { score, comment });
   },
+  returnSubmission(id, reason) {
+    return request('POST', '/portal/teacher/submissions/' + encodeURIComponent(id) + '/return', { reason });
+  },
   teacherAttendance(classId, date) {
     return request('GET', '/portal/teacher/attendance' + qs({ classId, date }));
   },
@@ -208,30 +211,56 @@ const api = {
     return request('GET', '/portal/parent/attendance' + qs({ studentId }));
   },
 
-  /* 课表（员工 / 教师 / 学员 / 家长） */
+  /* 课表与课次（三端只读 + 教师选课次） */
+  teacherTimetable(params) {
+    return request('GET', '/portal/teacher/timetable' + qs(params));
+  },
+  studentTimetable(params) {
+    return request('GET', '/portal/student/timetable' + qs(params));
+  },
+  parentTimetable(studentId, params) {
+    return request('GET', '/portal/parent/' + encodeURIComponent(studentId) + '/timetable' + qs(params));
+  },
+  teacherSessions(classId, params) {
+    return request('GET', '/portal/teacher/sessions' + qs({ classId, ...params }));
+  },
+  teacherAttendanceSummary(classId, month) {
+    return request('GET', '/portal/teacher/attendance/summary' + qs({ classId, month }));
+  },
+
+  /* 员工课表：全部班级课次（周视图 / 维护主题与状态） */
   sessions(start, end, classId, teacherId) {
     return request('GET', '/sessions' + qs({ start, end, classId, teacherId }));
-  },
-  generateSessions(classId, fromDate) {
-    return request('POST', '/sessions/generate', { classId, fromDate });
   },
   updateSession(id, data) {
     return request('PUT', '/sessions/' + encodeURIComponent(id), data);
   },
-  teacherSessions(start, end) {
-    return request('GET', '/portal/teacher/sessions' + qs({ start, end }));
+
+  /* 后台排课规则与课次 */
+  classSchedules(classId) {
+    return request('GET', '/classes/' + encodeURIComponent(classId) + '/schedules');
   },
-  updateTeacherSession(id, data) {
-    return request('PUT', '/portal/teacher/sessions/' + encodeURIComponent(id), data);
+  createSchedule(classId, data) {
+    return request('POST', '/classes/' + encodeURIComponent(classId) + '/schedules', data);
   },
-  studentSessions(start, end) {
-    return request('GET', '/portal/student/sessions' + qs({ start, end }));
+  updateSchedule(ruleId, data) {
+    return request('PUT', '/schedules/' + encodeURIComponent(ruleId), data);
   },
-  parentSessions(studentId, start, end) {
-    return request('GET', '/portal/parent/sessions' + qs({ studentId, start, end }));
+  deleteSchedule(ruleId) {
+    return request('DELETE', '/schedules/' + encodeURIComponent(ruleId));
   },
-  teacherAttendanceSummary(classId, month) {
-    return request('GET', '/portal/teacher/attendance/summary' + qs({ classId, month }));
+  classSessions(classId, params) {
+    return request('GET', '/classes/' + encodeURIComponent(classId) + '/sessions' + qs(params));
+  },
+  generateSessions(classId, data) {
+    const payload = typeof data === 'string' ? { from: data } : (data || {});
+    return request('POST', '/classes/' + encodeURIComponent(classId) + '/sessions/generate', payload);
+  },
+  cancelSession(sessionId) {
+    return request('POST', '/sessions/' + encodeURIComponent(sessionId) + '/cancel');
+  },
+  rescheduleSession(sessionId, data) {
+    return request('POST', '/sessions/' + encodeURIComponent(sessionId) + '/reschedule', data);
   },
 
   /* 系统设置 */

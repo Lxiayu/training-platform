@@ -6,6 +6,8 @@
 - CORS 放开（原型联调）；
 - 挂载 web/ 静态前端（登录后浏览器直接访问 /login.html 预览）。
 """
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,31 +29,35 @@ def _ensure_db() -> None:
     """建表并在空库时播种种子数据（uvicorn 启动与测试首次访问均会触发）。
 
     老库（v0.4）没有 `bills` 表数据：启动时按课程价补建应收账单，并把历史学费
-    流水挂到账单上，保证升级后家长端「应缴 / 已缴 / 欠费」立即可用。
-    老库同样没有课次数据：启动时按班级排课规则补齐课表。
+    流水挂到账单上，保证升级后家长端「应缴 / 已缴 / 欠费」立即可用；
+    同理，老库没有排课规则 / 课次：按班级的「上课时间」文本补建，课表立即可用。
     """
     init_db()
     if repository.find("users", "admin") is None:
         seed_db()
     else:
         BillService().backfill()
-    ScheduleService().ensure_all()
+        ScheduleService().backfill_legacy()
+        ScheduleService().ensure_all()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """启动时建表 / 播种 / 兼容升级（老库补账单与课次）。"""
+    _ensure_db()
+    yield
 
 
 app = FastAPI(
     title="启航编程管理系统 API",
-    version="0.1.0",
+    version="0.5.0",
+    lifespan=lifespan,
     description=(
         "培训机构一站式管理后端 · 关系数据库版（SQLAlchemy + SQLite/MySQL）。\n\n"
         "统一响应壳：成功 `{code: 0, message, data}`，失败 `{code, message}`。\n\n"
         "认证方式：`Authorization: Bearer <token>`（POST /api/v1/auth/login 获取）。"
     ),
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    _ensure_db()
 
 
 app.add_middleware(

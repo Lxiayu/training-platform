@@ -680,6 +680,58 @@ tbody tr:hover { background: #f8faff; }
   .res-grid { grid-template-columns: 1fr; }
 }
 
+/* ---------- 课表（三端周视图） ---------- */
+.tt-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tt-range { font-size: 12px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.timetable { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+.tt-day {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--bg-soft);
+  min-height: 150px; display: flex; flex-direction: column; overflow: hidden;
+}
+.tt-day.today { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 1px var(--primary) inset; }
+.tt-day-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+  padding: 8px 10px; background: rgba(255,255,255,.6); border-bottom: 1px solid var(--border);
+  font-size: 12px; color: var(--muted);
+}
+.tt-day-head b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tt-day-body { padding: 8px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.tt-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 14px 0; }
+.tt-session {
+  background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--primary);
+  border-radius: 8px; padding: 8px 9px; cursor: pointer;
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease);
+}
+.tt-session:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.tt-session.done { border-left-color: var(--success); }
+.tt-session.rescheduled { border-left-color: var(--warning); }
+.tt-session.cancelled { border-left-color: var(--muted); opacity: .6; }
+.tt-session.cancelled .tt-time, .tt-session.cancelled .tt-name { text-decoration: line-through; }
+.tt-time { font-size: 12px; font-weight: 600; color: var(--primary); font-variant-numeric: tabular-nums; }
+.tt-name { font-size: 13px; margin-top: 2px; line-height: 1.4; }
+.tt-sub { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.tt-foot { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tt-foot .badge { font-size: 10px; padding: 1px 7px; }
+.tt-hw { font-size: 10px; color: var(--info); background: var(--info-bg); border-radius: 999px; padding: 1px 7px; }
+.tt-student { margin-top: 6px; font-size: 11px; color: var(--muted); border-top: 1px dashed var(--border); padding-top: 4px; }
+.tt-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.tt-detail .k { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.tt-detail .v { font-size: 14px; }
+.check-line { display: flex; align-items: center; gap: 8px; min-height: 38px; font-size: 13px; color: var(--text); cursor: pointer; }
+.check-line input { width: 16px; height: 16px; accent-color: var(--primary); }
+@media (max-width: 960px) {
+  .timetable { grid-template-columns: 1fr; }
+  .tt-day { flex-direction: row; min-height: 0; }
+  .tt-day-head {
+    flex-direction: column; align-items: flex-start; justify-content: center;
+    min-width: 72px; border-bottom: none; border-right: 1px solid var(--border);
+  }
+  .tt-day-body { flex-direction: row; overflow-x: auto; }
+  .tt-session { min-width: 190px; }
+  .tt-empty { padding: 10px; }
+  .tt-detail { grid-template-columns: 1fr; }
+}
+
 /* ---------- 动效降级 ---------- */
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
@@ -687,45 +739,7 @@ tbody tr:hover { background: #f8faff; }
   .skeleton::after { animation: none; }
 }
 
-/* ---------- 课表（周视图） ---------- */
-.tt-week {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(150px, 1fr));
-  gap: 10px;
-  overflow-x: auto;
-  padding: 4px 2px 10px;
-}
-.tt-day {
-  background: var(--bg-soft);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 8px;
-  min-height: 190px;
-}
-.tt-day.today { background: var(--primary-50); border-color: var(--primary-100); }
-.tt-day-head {
-  display: flex; align-items: baseline; justify-content: space-between;
-  padding: 2px 4px 8px;
-}
-.tt-day-name { font-size: 13px; font-weight: 600; }
-.tt-day-date { font-size: 11px; color: var(--muted); }
-.tt-session {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  padding: 8px 9px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: border-color .15s, box-shadow .15s;
-}
-.tt-session:hover { border-color: var(--primary); box-shadow: 0 6px 16px -12px rgba(47,91,234,.5); }
-.tt-time { font-size: 11px; font-weight: 600; color: var(--primary); letter-spacing: .2px; }
-.tt-name { font-size: 13px; font-weight: 600; margin: 3px 0 2px; line-height: 1.3; }
-.tt-meta { font-size: 11px; color: var(--muted); line-height: 1.5; }
-.tt-status { margin-top: 6px; }
-.tt-empty { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 4px; }
-.tt-range { font-size: 13px; font-weight: 600; white-space: nowrap; }
-
+/* ---------- 考勤统计 ---------- */
 .att-summary { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .att-chip {
   background: var(--bg-soft);
@@ -735,7 +749,3 @@ tbody tr:hover { background: #f8faff; }
   color: var(--muted);
 }
 .att-chip b { color: var(--text); }
-
-@media (max-width: 1100px) {
-  .tt-week { grid-template-columns: repeat(7, 150px); }
-}

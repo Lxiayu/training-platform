@@ -25,6 +25,7 @@ from app.db.models import (
     Attendance,
     Bill,
     Class,
+    ClassSchedule,
     ClassSession,
     Config,
     Course,
@@ -44,6 +45,8 @@ MODELS: dict[str, type] = {
     "teachers": Teacher,
     "courses": Course,
     "classes": Class,
+    "classSchedules": ClassSchedule,
+    "classSessions": ClassSession,
     "students": Student,
     "payments": Payment,
     "bills": Bill,           # 应收账单（缴费详情口径）
@@ -52,7 +55,6 @@ MODELS: dict[str, type] = {
     "assignments": Assignment,
     "submissions": Submission,
     "attendance": Attendance,
-    "sessions": ClassSession,
 }
 PK_OF = {name: ("username" if name == "users" else "id") for name in MODELS}
 
@@ -175,6 +177,17 @@ class DB:
         from app.core.config import now_iso
 
         return self.update_fields(coll, code, {"deletedAt": now_iso()}, label=label)
+
+    def hard_delete(self, coll: str, code: str, *, label: str = "记录") -> None:
+        """物理删除（仅用于「规则重新生成」等可安全丢弃的派生记录）。"""
+        Model = MODELS[coll]
+        pk = PK_OF[coll]
+        with SessionLocal() as s:
+            obj = s.get(Model, code)
+            if obj is None:
+                raise BizException(404, f"{label}不存在")
+            s.delete(obj)
+            s.commit()
 
     def next_code(self, coll: str, prefix: str) -> str:
         """生成下一个业务编号：prefix + 三位递增数字（扫描含软删记录防复用）。"""

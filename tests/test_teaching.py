@@ -10,6 +10,7 @@
 """
 import os
 import tempfile
+from datetime import date, timedelta
 
 # 与 test_identities 共用同一隔离库，避免重复 engine；本模块 fixture 会重置并播种
 _DB_FILE = os.path.join(tempfile.gettempdir(), "qihang_identities_test.db")
@@ -103,11 +104,30 @@ def test_assignment_lifecycle_and_grading_visible_to_parent(client):
     target = [x for x in rows if x["assignmentId"] == aid]
     assert target and target[0]["score"] == 90 and target[0]["comment"] == "思路清晰"
 
-    # 学员重新提交会清空旧批改，等待重新批阅
+    # 已批改的提交不可直接改交（需教师退回）
+    blocked = client.post(f"{API}/portal/student/assignments/{aid}/submit", headers=student,
+                          json={"content": "第三版答案"})
+    assert blocked.status_code == 409
+
+    # 教师退回后，原成绩作废，学员可重新提交
+    returned = client.post(f"{API}/portal/teacher/submissions/{sid}/return", headers=teacher,
+                           json={"reason": "请补充边界情况说明"})
+    assert returned.status_code == 200
+    assert returned.json()["data"]["status"] == "已退回"
+    assert returned.json()["data"]["score"] is None
+    assert returned.json()["data"]["returnReason"] == "请补充边界情况说明"
+
+    # 已退回、学员尚未重交时不能直接批改
+    regrade = client.post(f"{API}/portal/teacher/submissions/{sid}/grade", headers=teacher,
+                          json={"score": 80, "comment": "直接改分"})
+    assert regrade.status_code == 409
+
     resubmit = client.post(f"{API}/portal/student/assignments/{aid}/submit", headers=student,
                            json={"content": "第三版答案"})
+    assert resubmit.status_code == 200
     assert resubmit.json()["data"]["status"] == "已提交"
     assert resubmit.json()["data"]["score"] is None
+    assert resubmit.json()["data"]["returnReason"] is None
 
 
 def test_student_cannot_submit_other_class_assignment(client):
@@ -191,3 +211,73 @@ def test_parent_cannot_read_unrelated_child(client):
 def test_teacher_cannot_read_other_class_attendance(client):
     h = headers(client, "teacher")
     assert client.get(f"{API}/portal/teacher/attendance?classId=BJ001&date=2026-10-17", headers=h).status_code == 403
+
+
+# ---------------- 作业规则补齐（截止 / 退回 / 删除保护） ----------------
+
+def test_assignment_due_date_validation(client):
+    teacher = headers(client, "teacher")
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    r = client.post(f"{API}/portal/teacher/assignments", headers=teacher,
+                    json={"classId": "BJ002", "title": "过期作业", "dueDate": yesterday})
+    assert r.status_code == 422
+    r = client.post(f"{API}/portal/teacher/assignments", headers=teacher,
+                    json={"classId": "BJ002", "title": "格式错误", "dueDate": "2026/01/01"})
+    assert r.status_code == 400
+
+
+def test_assignment_cannot_be_deleted_after_submission(client):
+    teacher = headers(client, "teacher")
+    student = headers(client, "student")
+
+    # 无提交可删除
+    free = client.post(f"{API}/portal/teacher/assignments", headers=teacher,
+                       json={"classId": "BJ002", "title": "可删除作业",
+                             "dueDate": (date.today() + timedelta(days=5)).isoformat()}).json()["data"]
+    assert client.delete(f"{API}/portal/teacher/assignments/{free['id']}", headers=teacher).status_code == 200
+
+    # 有提交不可删除（409）
+    used = client.post(f"{API}/portal/teacher/assignments", headers=teacher,
+                       json={"classId": "BJ002", "title": "已有提交作业",
+                             "dueDate": (date.today() + timedelta(days=5)).isoformat()}).json()["data"]
+    assert client.post(f"{API}/portal/student/assignments/{used['id']}/submit",
+                       headers=student, json={"content": "答案"}).status_code == 200
+    blocked = client.delete(f"{API}/portal/teacher/assignments/{used['id']}", headers=teacher)
+    assert blocked.status_code == 409
+
+
+def test_late_submission_blocked_unless_allow_late(client):
+    from app.db.repository import db
+
+    teacher = headers(client, "teacher")
+    student = headers(client, "student")
+    created = client.post(f"{API}/portal/teacher/assignments", headers=teacher,
+                          json={"classId": "BJ002", "title": "截止校验作业",
+                                "dueDate": (date.today() + timedelta(days=2)).isoformat()}).json()["data"]
+    aid = created["id"]
+
+    # 模拟时间流逝：把截止日改到过去
+    db.update_fields("assignments", aid, {"dueDate": "2020-01-01"}, label="作业")
+    late = client.post(f"{API}/portal/student/assignments/{aid}/submit",
+                       headers=student, json={"content": "迟交答案"})
+    assert late.status_code == 409
+
+    # 教师开启「允许迟交」后可以提交
+    assert client.put(f"{API}/portal/teacher/assignments/{aid}", headers=teacher,
+                      json={"allowLate": True}).status_code == 200
+    ok = client.post(f"{API}/portal/student/assignments/{aid}/submit",
+                     headers=student, json={"content": "迟交答案"})
+    assert ok.status_code == 200
+    assert ok.json()["data"]["status"] == "已提交"
+
+
+def test_return_requires_graded_submission(client):
+    teacher = headers(client, "teacher")
+    # TJ001 状态「已提交」，未批改不可退回
+    r = client.post(f"{API}/portal/teacher/submissions/TJ001/return", headers=teacher,
+                    json={"reason": "未批改不能退回"})
+    assert r.status_code == 409
+    # 退回理由必填
+    r = client.post(f"{API}/portal/teacher/submissions/TJ002/return", headers=teacher,
+                    json={"reason": "x"})
+    assert r.status_code == 422

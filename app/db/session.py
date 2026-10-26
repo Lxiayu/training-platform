@@ -83,22 +83,39 @@ def get_session() -> Session:
 
 
 def _ensure_columns() -> None:
-    """轻量增量迁移：为 v0.4 已有库补 ``payments.billId``（本项目未引入 Alembic）。
+    """轻量增量迁移：为已有库补齐后加列（本项目未引入 Alembic）。
 
     ``create_all`` 只建缺失的表，不会给已存在的表加列；这里对 SQLite / MySQL
     统一用 ``ALTER TABLE ... ADD COLUMN`` 幂等补齐，避免老库启动即报错。
+    新增列时同步维护下面的 ``_ADDED_COLUMNS`` 即可。
     """
     from sqlalchemy import inspect, text
 
+    added: dict[str, dict[str, str]] = {
+        "payments": {"billId": "VARCHAR(16)"},
+        "assignments": {
+            "sessionId": "VARCHAR(16)",
+            "allowLate": "BOOLEAN NOT NULL DEFAULT 0",
+        },
+        "submissions": {"returnReason": "VARCHAR(256)"},
+    }
     inspector = inspect(engine)
-    if "payments" not in set(inspector.get_table_names()):
-        return
-    columns = {c["name"] for c in inspector.get_columns("payments")}
-    if "billId" in columns:
-        return
+    tables = set(inspector.get_table_names())
     quote = '"' if engine.dialect.name == "sqlite" else "`"
     with engine.begin() as conn:
-        conn.execute(text(f"ALTER TABLE payments ADD COLUMN {quote}billId{quote} VARCHAR(16)"))
+        for table, columns in added.items():
+            if table not in tables:
+                continue
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            for name, ddl in columns.items():
+                if name in existing:
+                    continue
+                conn.execute(
+                    text(
+                        f"ALTER TABLE {quote}{table}{quote} "
+                        f"ADD COLUMN {quote}{name}{quote} {ddl}"
+                    )
+                )
 
 
 def init_db() -> None:

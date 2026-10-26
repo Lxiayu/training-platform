@@ -1,93 +1,162 @@
-"""课表（课次）路由：员工周课表、教师 / 学员 / 家长门户课表，以及考勤统计。
+"""排课规则与课次管理路由（后台）。
 
-- 员工：查看任意班级/教师课表、按班级补齐课次、调整课次主题与状态；
-- 教师：查看自己班级课表、调整课次主题与状态（仅本人班级）；
-- 学员 / 家长：只读查看本班 / 关联学员的课表；
-- 教师可查看班级考勤汇总（出勤率、迟到/请假/缺勤分布）。
+- 读：员工（含教务 / 财务 / 前台）可查看班级排课与课次；
+- 写：仅超级管理员 / 教务管理员；
+- 课次生成、取消、调课均由服务层校验业务规则（已上课不可改等）。
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 
-from app.core.deps import require_parent, require_staff, require_student, require_teacher
+from app.core.config import ROLE_ACADEMIC, ROLE_ADMIN
+from app.core.deps import require_roles, require_staff
+from app.core.exceptions import BizException
 from app.core.response import ok
-from app.schemas import SessionGenerate, SessionUpdate
+from app.schemas import (
+    ScheduleCreate,
+    ScheduleUpdate,
+    SessionGenerate,
+    SessionReschedule,
+    SessionUpdate,
+)
 from app.services.schedule import ScheduleService
-from app.services.teaching import AttendanceService
 
-router = APIRouter(tags=["课表"])
+router = APIRouter(tags=["排课与课次"])
 schedule_service = ScheduleService()
-attendance_service = AttendanceService()
 
 
-# ---------- 员工 ----------
+def _date(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        raise BizException(400, "日期格式应为 YYYY-MM-DD")
+
+
+# ---------- 员工课表（跨班级周视图） ----------
 
 @router.get("/sessions")
-def list_sessions(
+def list_all_sessions(
     start: str | None = Query(default=None),
     end: str | None = Query(default=None),
     classId: str | None = Query(default=None),
     teacherId: str | None = Query(default=None),
     _user: dict = Depends(require_staff),
 ):
-    return ok(schedule_service.list_sessions(start=start, end=end, class_id=classId, teacher_id=teacherId))
+    return ok(schedule_service.list_all(
+        date_from=start, date_to=end, class_id=classId, teacher_id=teacherId,
+    ))
 
 
 @router.post("/sessions/generate")
-def generate_sessions(body: SessionGenerate, _user: dict = Depends(require_staff)):
-    created = schedule_service.generate_for_class(body.class_id, from_date=body.from_date)
-    return ok({"created": created}, f"已生成 {created} 个课次")
-
-
-@router.put("/sessions/{code}")
-def update_session(code: str, body: SessionUpdate, _user: dict = Depends(require_staff)):
-    return ok(schedule_service.update_session(code, body.model_dump(by_alias=True, exclude_unset=True)))
-
-
-# ---------- 教师 ----------
-
-@router.get("/portal/teacher/sessions")
-def teacher_sessions(
-    start: str | None = Query(default=None),
-    end: str | None = Query(default=None),
-    user: dict = Depends(require_teacher),
+def generate_sessions_for_class(
+    body: SessionGenerate,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
 ):
-    return ok(schedule_service.teacher_sessions(user["refId"], start, end))
+    """兼容「班级 + 起始日」的补课次入口。"""
+    if not body.class_id:
+        raise BizException(400, "请选择班级")
+    return ok(schedule_service.generate(
+        body.class_id, start=_date(body.from_date), end=_date(body.date_to),
+    ), "课次已生成")
 
 
-@router.put("/portal/teacher/sessions/{code}")
-def teacher_update_session(code: str, body: SessionUpdate, user: dict = Depends(require_teacher)):
-    data = body.model_dump(by_alias=True, exclude_unset=True)
-    # 教师只允许调整主题与状态，日期/时间由教务统一排课
-    data = {k: v for k, v in data.items() if k in ("topic", "status")}
-    return ok(schedule_service.update_session(code, data, teacher_code=user["refId"]))
-
-
-@router.get("/portal/teacher/attendance/summary")
-def teacher_attendance_summary(
-    classId: str = Query(...),
-    month: str | None = Query(default=None),
-    user: dict = Depends(require_teacher),
+@router.put("/sessions/{session_id}")
+def update_session(
+    session_id: str,
+    body: SessionUpdate,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
 ):
-    return ok(attendance_service.class_summary(user["refId"], classId, month))
+    """维护课次主题 / 状态 / 教室；调课请使用 /reschedule 保留原时间。"""
+    return ok(
+        schedule_service.update_session(
+            session_id, body.model_dump(by_alias=True, exclude_unset=True)
+        ),
+        "课次已更新",
+    )
 
 
-# ---------- 学员 ----------
+# ---------- 排课规则 ----------
 
-@router.get("/portal/student/sessions")
-def student_sessions(
-    start: str | None = Query(default=None),
-    end: str | None = Query(default=None),
-    user: dict = Depends(require_student),
+@router.get("/classes/{code}/schedules")
+def list_schedules(code: str, _user: dict = Depends(require_staff)):
+    return ok(schedule_service.list_rules(code))
+
+
+@router.post("/classes/{code}/schedules")
+def create_schedule(
+    code: str,
+    body: ScheduleCreate,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
 ):
-    return ok(schedule_service.student_sessions(user["refId"], start, end))
+    return ok(schedule_service.create_rule(code, body.model_dump(by_alias=True)), "排课规则已保存")
 
 
-# ---------- 家长 ----------
-
-@router.get("/portal/parent/sessions")
-def parent_sessions(
-    studentId: str | None = Query(default=None),
-    start: str | None = Query(default=None),
-    end: str | None = Query(default=None),
-    user: dict = Depends(require_parent),
+@router.put("/schedules/{rule_id}")
+def update_schedule(
+    rule_id: str,
+    body: ScheduleUpdate,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
 ):
-    return ok(schedule_service.parent_sessions(user["refId"], studentId, start, end))
+    return ok(
+        schedule_service.update_rule(rule_id, body.model_dump(by_alias=True, exclude_unset=True)),
+        "排课规则已更新",
+    )
+
+
+@router.delete("/schedules/{rule_id}")
+def delete_schedule(
+    rule_id: str,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
+):
+    schedule_service.delete_rule(rule_id)
+    return ok(None, "排课规则已删除")
+
+
+# ---------- 课次 ----------
+
+@router.get("/classes/{code}/sessions")
+def list_sessions(
+    code: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = Query(default=None),
+    _user: dict = Depends(require_staff),
+):
+    return ok(schedule_service.sessions(code, date_from=from_, date_to=to))
+
+
+@router.post("/classes/{code}/sessions/generate")
+def generate_sessions(
+    code: str,
+    body: SessionGenerate | None = None,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
+):
+    """按当前规则补齐课次（幂等；不删除已有课次）。"""
+    payload = body or SessionGenerate()
+    return ok(
+        schedule_service.generate(
+            code, start=_date(payload.date_from), end=_date(payload.date_to),
+        ),
+        "课次已生成",
+    )
+
+
+@router.post("/sessions/{session_id}/cancel")
+def cancel_session(
+    session_id: str,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
+):
+    return ok(schedule_service.cancel(session_id), "课次已取消")
+
+
+@router.post("/sessions/{session_id}/reschedule")
+def reschedule_session(
+    session_id: str,
+    body: SessionReschedule,
+    _user: dict = Depends(require_roles(ROLE_ADMIN, ROLE_ACADEMIC)),
+):
+    return ok(
+        schedule_service.reschedule(session_id, body.model_dump(by_alias=True)),
+        "调课成功",
+    )

@@ -6,6 +6,7 @@
 - 家长只能查看自己关联学员的作业、批改结果与考勤；
 - 考勤按「班级 + 日期 + 学员」唯一，重复保存为更新而非新增。
 """
+from datetime import date
 from typing import Any
 
 import re
@@ -17,7 +18,40 @@ from app.services.schedule import ScheduleService
 
 ASSIGNMENT_STATUSES = ("进行中", "已结束")
 ATTENDANCE_STATUSES = ("出勤", "迟到", "请假", "缺勤")
-SUBMISSION_STATUSES = ("已提交", "已批改")
+SUBMISSION_STATUSES = ("已提交", "已批改", "已退回")
+
+
+def _parse_due_date(value: str | None, *, floor: str | None = None) -> str:
+    """校验截止日期（YYYY-MM-DD），早于今天或早于发布日期时拒绝。"""
+    if value in (None, ""):
+        return today()
+    try:
+        due = date.fromisoformat(str(value).strip())
+    except ValueError:
+        raise BizException(400, "截止日期格式应为 YYYY-MM-DD")
+    if due < date.today():
+        raise BizException(422, "截止日期不能早于今天")
+    if floor:
+        try:
+            if due < date.fromisoformat(floor[:10]):
+                raise BizException(422, "截止日期不能早于发布日期")
+        except ValueError:
+            pass
+    return due.isoformat()
+
+
+def _check_session(teacher_code: str, class_id: str, session_id: str | None) -> str | None:
+    """作业关联课次时，校验课次属于该班级且由本教师授课。"""
+    if not session_id:
+        return None
+    session = db.locate("classSessions", session_id, label="课次")
+    if session.get("classId") != class_id:
+        raise BizException(400, "关联课次不属于该班级")
+    if session.get("teacherId") != teacher_code:
+        raise BizException(403, "只能关联自己授课的课次")
+    if session.get("status") == "已取消":
+        raise BizException(409, "已取消的课次不能关联作业")
+    return session_id
 
 
 def _class_students(class_id: str) -> list[dict[str, Any]]:
@@ -70,9 +104,11 @@ class AssignmentService:
             "id": db.next_code("assignments", "HW"),
             "classId": cls["id"],
             "teacherId": teacher_code,
+            "sessionId": _check_session(teacher_code, cls["id"], data.get("sessionId")),
             "title": title,
             "content": (data.get("content") or "").strip(),
-            "dueDate": data.get("dueDate") or ts,
+            "dueDate": _parse_due_date(data.get("dueDate")),
+            "allowLate": bool(data.get("allowLate")),
             "status": "进行中",
             "createdAt": ts,
             "updatedAt": ts,
@@ -81,23 +117,29 @@ class AssignmentService:
         return self._decorate_teacher(record)
 
     def update(self, teacher_code: str, assignment_id: str, data: dict[str, Any]) -> dict[str, Any]:
-        _assignment_of_teacher(teacher_code, assignment_id)
+        current = _assignment_of_teacher(teacher_code, assignment_id)
         fields = {k: v for k, v in data.items() if v is not None}
         if "status" in fields and fields["status"] not in ASSIGNMENT_STATUSES:
             raise BizException(400, "作业状态只能是「进行中」或「已结束」")
         if "title" in fields and not str(fields["title"]).strip():
             raise BizException(400, "作业标题不能为空")
+        if "dueDate" in fields:
+            fields["dueDate"] = _parse_due_date(fields["dueDate"], floor=current.get("createdAt"))
+        if "sessionId" in data:
+            # 显式传空表示解除课次关联
+            fields["sessionId"] = _check_session(
+                teacher_code, current["classId"], data.get("sessionId")
+            )
         fields["updatedAt"] = today()
         rec = db.update_fields("assignments", assignment_id, fields, label="作业")
         return self._decorate_teacher(rec)
 
     def delete(self, teacher_code: str, assignment_id: str) -> None:
         _assignment_of_teacher(teacher_code, assignment_id)
+        submitted = [s for s in db.alive("submissions") if s.get("assignmentId") == assignment_id]
+        if submitted:
+            raise BizException(409, "该作业已有学员提交，不能删除；如需停止提交请将状态改为「已结束」")
         db.soft_delete("assignments", assignment_id, label="作业")
-        # 同步归档该作业下的提交记录，避免列表出现无主数据
-        for sub in db.alive("submissions"):
-            if sub.get("assignmentId") == assignment_id:
-                db.soft_delete("submissions", sub["id"], label="作业提交")
 
     def submissions(self, teacher_code: str, assignment_id: str) -> dict[str, Any]:
         assignment = _assignment_of_teacher(teacher_code, assignment_id)
@@ -117,6 +159,7 @@ class AssignmentService:
                 "score": sub.get("score") if sub else None,
                 "comment": sub.get("comment") if sub else None,
                 "gradedAt": sub.get("gradedAt") if sub else None,
+                "returnReason": sub.get("returnReason") if sub else None,
             })
         return {
             "assignment": self._decorate_teacher(assignment),
@@ -129,6 +172,8 @@ class AssignmentService:
     def grade(self, teacher_code: str, submission_id: str, score: int, comment: str | None) -> dict[str, Any]:
         sub = db.locate("submissions", submission_id or "", label="作业提交")
         _assignment_of_teacher(teacher_code, sub.get("assignmentId") or "")
+        if sub.get("status") == "已退回":
+            raise BizException(409, "该提交已退回，等待学员重新提交后再批改")
         if not isinstance(score, int) or not 0 <= score <= 100:
             raise BizException(400, "分数须为 0-100 的整数")
         rec = db.update_fields(
@@ -159,6 +204,7 @@ class AssignmentService:
                 "content": a.get("content"),
                 "dueDate": a.get("dueDate"),
                 "status": a.get("status"),
+                "allowLate": bool(a.get("allowLate")),
                 "className": (db.find("classes", a.get("classId") or "") or {}).get("name", ""),
                 "teacherName": (db.find("teachers", a.get("teacherId") or "") or {}).get("name", ""),
                 "submissionId": sub["id"] if sub else None,
@@ -167,6 +213,7 @@ class AssignmentService:
                 "score": sub.get("score") if sub else None,
                 "comment": sub.get("comment") if sub else None,
                 "gradedAt": sub.get("gradedAt") if sub else None,
+                "returnReason": sub.get("returnReason") if sub else None,
                 "submittedContent": sub.get("content") if sub else None,
             })
         return result
@@ -178,6 +225,9 @@ class AssignmentService:
             raise BizException(403, "该作业不属于你所在的班级")
         if assignment.get("status") != "进行中":
             raise BizException(409, "该作业已结束，无法提交")
+        due_date = assignment.get("dueDate")
+        if due_date and today() > due_date and not assignment.get("allowLate"):
+            raise BizException(409, "作业已截止，不允许迟交")
         text = (content or "").strip()
         if not text:
             raise BizException(400, "请填写作业内容")
@@ -185,7 +235,9 @@ class AssignmentService:
         ts = today()
         existing = db.find_one("submissions", assignmentId=assignment_id, studentId=student_code)
         if existing:
-            # 重新提交：清空旧批改，等待教师重新批阅
+            if existing.get("status") == "已批改":
+                raise BizException(409, "作业已批改，如需修改请让教师退回后重新提交")
+            # 重新提交（含被退回后重交）：清空旧批改与退回理由，等待教师重新批阅
             rec = db.update_fields(
                 "submissions", existing["id"],
                 {
@@ -196,6 +248,7 @@ class AssignmentService:
                     "comment": None,
                     "gradedAt": None,
                     "gradedBy": None,
+                    "returnReason": None,
                     "updatedAt": ts,
                 },
                 label="作业提交",
@@ -212,10 +265,35 @@ class AssignmentService:
                 "comment": None,
                 "gradedAt": None,
                 "gradedBy": None,
+                "returnReason": None,
                 "createdAt": ts,
                 "updatedAt": ts,
             }
             db.insert("submissions", rec)
+        return rec
+
+    def return_submission(self, teacher_code: str, submission_id: str, reason: str) -> dict[str, Any]:
+        """教师退回已批改的提交：成绩作废、记录退回理由，学员可重新提交。"""
+        sub = db.locate("submissions", submission_id or "", label="作业提交")
+        _assignment_of_teacher(teacher_code, sub.get("assignmentId") or "")
+        if sub.get("status") != "已批改":
+            raise BizException(409, "只有「已批改」的提交可以退回")
+        text = (reason or "").strip()
+        if len(text) < 2:
+            raise BizException(400, "请填写退回理由（至少 2 个字）")
+        rec = db.update_fields(
+            "submissions", submission_id,
+            {
+                "status": "已退回",
+                "score": None,
+                "comment": None,
+                "gradedAt": None,
+                "gradedBy": None,
+                "returnReason": text,
+                "updatedAt": today(),
+            },
+            label="作业提交",
+        )
         return rec
 
     # ---------- 家长 ----------
@@ -238,11 +316,13 @@ class AssignmentService:
                     "title": a.get("title"),
                     "dueDate": a.get("dueDate"),
                     "assignmentStatus": a.get("status"),
+                    "allowLate": bool(a.get("allowLate")),
                     "submitStatus": sub["status"] if sub else "未提交",
                     "submittedAt": sub.get("submittedAt") if sub else None,
                     "score": sub.get("score") if sub else None,
                     "comment": sub.get("comment") if sub else None,
                     "gradedAt": sub.get("gradedAt") if sub else None,
+                    "returnReason": sub.get("returnReason") if sub else None,
                 })
         return result
 
@@ -252,13 +332,14 @@ class AssignmentService:
         cls = db.find("classes", a.get("classId") or "")
         course = db.find("courses", cls.get("courseId") or "") if cls else None
         subs = [s for s in db.alive("submissions") if s.get("assignmentId") == a.get("id")]
+        submitted = [s for s in subs if s.get("status") != "已退回"]
         students = _class_students(a.get("classId") or "")
         return {
             **a,
             "className": cls["name"] if cls else "",
             "courseName": course["name"] if course else "",
             "totalStudents": len(students),
-            "submittedCount": len(subs),
+            "submittedCount": len(submitted),
             "gradedCount": sum(1 for s in subs if s.get("status") == "已批改"),
         }
 
@@ -444,7 +525,7 @@ class TeachingStatsService:
         ]
         submitted = {
             s.get("assignmentId") for s in db.alive("submissions")
-            if s.get("studentId") == student_code
+            if s.get("studentId") == student_code and s.get("status") != "已退回"
         }
         records = [a for a in db.alive("attendance") if a.get("studentId") == student_code]
         return {

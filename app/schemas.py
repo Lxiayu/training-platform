@@ -132,6 +132,41 @@ class ClassUpdate(CamelModel):
     status: str | None = None
 
 
+# ---------- 排课规则 / 课次 ----------
+
+class ScheduleCreate(CamelModel):
+    weekday: int = Field(ge=1, le=7)
+    start_time: str = Field(min_length=4, max_length=8)
+    end_time: str = Field(min_length=4, max_length=8)
+    effective_from: str | None = None
+    effective_to: str | None = None
+    classroom: str | None = Field(default=None, max_length=32)
+
+
+class ScheduleUpdate(CamelModel):
+    weekday: int | None = Field(default=None, ge=1, le=7)
+    start_time: str | None = Field(default=None, min_length=4, max_length=8)
+    end_time: str | None = Field(default=None, min_length=4, max_length=8)
+    effective_from: str | None = None
+    effective_to: str | None = None
+    classroom: str | None = Field(default=None, max_length=32)
+
+
+class SessionReschedule(CamelModel):
+    session_date: str
+    start_time: str | None = None
+    end_time: str | None = None
+    classroom: str | None = Field(default=None, max_length=32)
+
+
+class SessionGenerate(CamelModel):
+    """按规则补齐课次：兼容「班级 + 起始日」与「日期区间」两种提交方式。"""
+    class_id: str | None = None
+    from_date: str | None = None
+    date_from: str | None = Field(default=None, alias="from")
+    date_to: str | None = Field(default=None, alias="to")
+
+
 # ---------- 学员 ----------
 
 class StudentCreate(CamelModel):
@@ -231,12 +266,16 @@ class AssignmentCreate(CamelModel):
     title: str = Field(min_length=1, max_length=100)
     content: str | None = Field(default=None, max_length=5000)
     due_date: str | None = None
+    session_id: str | None = None
+    allow_late: bool = False
 
 
 class AssignmentUpdate(CamelModel):
     title: str | None = Field(default=None, min_length=1, max_length=100)
     content: str | None = Field(default=None, max_length=5000)
     due_date: str | None = None
+    session_id: str | None = None
+    allow_late: bool | None = None
     status: str | None = None
 
 
@@ -247,6 +286,10 @@ class SubmissionCreate(CamelModel):
 class GradeRequest(CamelModel):
     score: int = Field(ge=0, le=100)
     comment: str | None = Field(default=None, max_length=500)
+
+
+class ReturnRequest(CamelModel):
+    reason: str = Field(min_length=2, max_length=100)
 
 
 class AttendanceItem(CamelModel):
@@ -263,17 +306,10 @@ class AttendanceSave(CamelModel):
 
 # ---------- 课表 ----------
 
-class SessionGenerate(CamelModel):
-    class_id: str
-    from_date: str | None = None
-
-
 class SessionUpdate(CamelModel):
+    """课次维护：主题 / 状态（调课仍走 reschedule 以保留追溯）。"""
     topic: str | None = Field(default=None, max_length=128)
     status: str | None = None
-    date: str | None = None
-    start_time: str | None = None
-    end_time: str | None = None
     classroom: str | None = Field(default=None, max_length=32)
 
 

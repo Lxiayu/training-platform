@@ -16,36 +16,19 @@ let ASSIGNMENTS = [];
 let CHILDREN = [];
 let parentAssignments = [];
 let parentAttendance = [];
-let parentSessions = [];
 let parentChildFilter = '';
-let parentTtFilter = '';
 
-/* ---------- 日期工具 ---------- */
+/* ---------- 课表状态与日期工具 ---------- */
+const TT = { start: null, sessions: [], seq: 0, title: '我的课表' };
+const TT_WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
-function fmtDateLocal(d) {
+function ttDate(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function ttAddDays(d, n) { const x = ttDate(d); x.setDate(x.getDate() + n); return x; }
+function ttIso(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
-
-function portalRange(days = 14) {
-  const start = new Date();
-  const end = new Date();
-  end.setDate(end.getDate() + days);
-  return [fmtDateLocal(start), fmtDateLocal(end)];
-}
-
-function attSummaryChips(records) {
-  const counts = { 出勤: 0, 迟到: 0, 请假: 0, 缺勤: 0 };
-  records.forEach(r => { if (counts[r.status] !== undefined) counts[r.status] += 1; });
-  const total = Object.values(counts).reduce((a, b) => a + b, 0);
-  const rate = total ? Math.round((counts['出勤'] + counts['迟到']) / total * 100) : 0;
-  return `<div class="att-summary">
-    <span class="att-chip">出勤 <b>${counts['出勤']}</b></span>
-    <span class="att-chip">迟到 <b>${counts['迟到']}</b></span>
-    <span class="att-chip">请假 <b>${counts['请假']}</b></span>
-    <span class="att-chip">缺勤 <b>${counts['缺勤']}</b></span>
-    <span class="att-chip">出勤率 <b>${rate}%</b></span>
-  </div>`;
-}
+function ttMonday(d) { const x = ttDate(d); return ttAddDays(x, -((x.getDay() + 6) % 7)); }
+function ttShort(iso) { return iso ? iso.slice(5).replace('-', '/') : ''; }
 
 /* ---------- 启动 ---------- */
 
@@ -98,74 +81,23 @@ function openPortalModal(title, bodyHtml, submitText, onSubmit) {
 
 async function initTeacher(el) {
   CLASSES = CTX.classes || [];
-  const [assignments, sessions] = await Promise.all([
-    api.teacherAssignments(),
-    api.teacherSessions(...portalRange(14)),
-  ]);
-  ASSIGNMENTS = assignments;
+  ASSIGNMENTS = await api.teacherAssignments();
   el.insertAdjacentHTML('beforeend', teacherStatsHtml());
+  el.insertAdjacentHTML('beforeend', timetableHtml('我的课表'));
   el.insertAdjacentHTML('beforeend', teacherClassesHtml());
-  el.insertAdjacentHTML('beforeend', teacherTimetableHtml(sessions));
   el.insertAdjacentHTML('beforeend', teacherAssignmentsHtml());
   el.insertAdjacentHTML('beforeend', teacherAttendanceHtml());
 
   $('#btn-new-assignment')?.addEventListener('click', () => openAssignmentEditor(null));
   $('#assignment-list')?.addEventListener('click', onAssignmentAction);
-  $('#teacher-timetable')?.addEventListener('click', onTeacherSessionAction);
-  $('#btn-att-summary')?.addEventListener('click', openAttendanceSummary);
   $('#att-class')?.addEventListener('change', loadAttendance);
   $('#att-date')?.addEventListener('change', loadAttendance);
   $('#att-load')?.addEventListener('click', loadAttendance);
   $('#att-save')?.addEventListener('click', saveAttendance);
+  $('#btn-att-summary')?.addEventListener('click', openAttendanceSummary);
 
-  // 默认定位到最近一次课次，避免打开时落在没有课的日期上
-  if (sessions.length) {
-    const next = sessions.find(s => s.status !== '已取消') || sessions[0];
-    const classSelect = $('#att-class');
-    const dateInput = $('#att-date');
-    if (classSelect) classSelect.value = next.classId;
-    if (dateInput) dateInput.value = next.date;
-  }
+  await initTimetable('我的课表');
   if (CLASSES.length) await loadAttendance();
-}
-
-function teacherTimetableHtml(sessions) {
-  const rows = sessions.slice(0, 12).map(s => `
-    <tr>
-      <td class="td-sub" style="white-space:nowrap">${esc(s.date)}</td>
-      <td style="white-space:nowrap">${esc(s.startTime)}-${esc(s.endTime)}</td>
-      <td>${esc(s.className)}</td>
-      <td>${esc(s.topic || '—')}</td>
-      <td>${badge(s.displayStatus)}${s.attendanceSaved ? ' <span class="td-sub">已考勤</span>' : ''}</td>
-      <td class="td-actions">
-        <button class="btn-link" data-att-class="${s.classId}" data-att-date="${s.date}">${ICONS.check}考勤</button>
-      </td>
-    </tr>`).join('') || emptyRow(6, '近两周暂无课次');
-  return `
-    <div class="card reveal" data-d="2" style="margin-top:16px">
-      <div class="card-head">
-        <div class="card-title">${ICONS.calendar} 我的课表</div>
-        <div class="td-sub">近两周</div>
-      </div>
-      <div class="card-body"><div class="table-wrap"><table>
-        <thead><tr><th>日期</th><th>时间</th><th>班级</th><th>授课主题</th><th>状态</th><th>操作</th></tr></thead>
-        <tbody id="teacher-timetable">${rows}</tbody>
-      </table></div></div>
-    </div>`;
-}
-
-function onTeacherSessionAction(e) {
-  const btn = e.target.closest('button[data-att-class]');
-  if (!btn) return;
-  const classId = btn.dataset.attClass;
-  const date = btn.dataset.attDate;
-  const classSelect = $('#att-class');
-  const dateInput = $('#att-date');
-  if (!classSelect || !dateInput) return;
-  classSelect.value = classId;
-  dateInput.value = date;
-  loadAttendance();
-  $('#att-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function teacherStatsHtml() {
@@ -243,12 +175,19 @@ async function reloadTeacherAssignments() {
   if (tbody) tbody.innerHTML = teacherAssignmentRows();
 }
 
-function openAssignmentEditor(a) {
+async function openAssignmentEditor(a) {
   if (!CLASSES.length) { showToast('还没有所带班级，无法布置作业', 'error'); return; }
   const isEdit = !!a;
   const options = CLASSES.map(c =>
     `<option value="${c.id}" ${a && a.classId === c.id ? 'selected' : ''}>${esc(c.name)}</option>`
   ).join('');
+  const defaultClass = a ? a.classId : CLASSES[0].id;
+  let sessions = [];
+  try {
+    sessions = await api.teacherSessions(defaultClass, {
+      from: todayStr(), to: ttIso(ttAddDays(new Date(), 120)),
+    });
+  } catch (e) { sessions = []; }
   const body = `
     <div class="form-grid">
       <div class="form-item full">
@@ -262,6 +201,14 @@ function openAssignmentEditor(a) {
       <div class="form-item">
         <label>截止日期</label>
         <input class="input" type="date" id="a-due" value="${a ? esc(a.dueDate || '') : todayStr()}">
+      </div>
+      <div class="form-item">
+        <label>关联课次（可选）</label>
+        <select class="select" id="a-session">${sessionOptions(sessions, a && a.sessionId)}</select>
+      </div>
+      <div class="form-item">
+        <label>迟交设置</label>
+        <label class="check-line"><input type="checkbox" id="a-late" ${a && a.allowLate ? 'checked' : ''}> 允许截止后补交</label>
       </div>
       <div class="form-item full">
         <label>作业要求</label>
@@ -282,6 +229,8 @@ function openAssignmentEditor(a) {
       classId: $('#a-class').value,
       dueDate: $('#a-due').value,
       content: $('#a-content').value.trim(),
+      sessionId: $('#a-session').value || null,
+      allowLate: $('#a-late').checked,
     };
     if (!payload.title) { showToast('请填写作业标题', 'error'); return false; }
     if (isEdit) payload.status = $('#a-status').value;
@@ -293,6 +242,27 @@ function openAssignmentEditor(a) {
     await reloadTeacherAssignments();
     return true;
   });
+  $('#a-class')?.addEventListener('change', async ev => {
+    const sel = $('#a-session');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">加载中…</option>';
+    try {
+      const rows = await api.teacherSessions(ev.target.value, {
+        from: todayStr(), to: ttIso(ttAddDays(new Date(), 120)),
+      });
+      sel.innerHTML = sessionOptions(rows, '');
+    } catch (e) {
+      sel.innerHTML = '<option value="">暂无可关联课次</option>';
+    }
+  });
+}
+
+function sessionOptions(sessions, selected) {
+  const opts = (sessions || [])
+    .filter(s => s.status !== '已取消')
+    .map(s => `<option value="${s.id}" ${s.id === selected ? 'selected' : ''}>${esc(s.sessionDate)} ${esc(s.startTime)} · ${esc(s.className || '')}</option>`)
+    .join('');
+  return `<option value="">不关联课次</option>${opts}`;
 }
 
 function onAssignmentAction(e) {
@@ -319,14 +289,18 @@ async function openSubmissions(a) {
     <tr>
       <td class="td-sub">${esc(r.studentId)}</td>
       <td>${esc(r.studentName)}</td>
-      <td>${badge(r.status)}</td>
+      <td>${badge(r.status)}${r.returnReason ? `<div class="td-sub">退回：${esc(r.returnReason)}</div>` : ''}</td>
       <td class="td-sub">${esc(r.submittedAt || '–')}</td>
       <td>${r.score == null ? '–' : r.score}</td>
       <td class="td-sub">${esc(r.comment || '–')}</td>
       <td class="td-actions">
-        ${r.submissionId
-          ? `<button class="btn-link" data-sub="${r.submissionId}">${ICONS.edit}${r.status === '已批改' ? '重新批改' : '批改'}</button>`
-          : '<span class="td-sub">等待提交</span>'}
+        ${!r.submissionId
+          ? '<span class="td-sub">等待提交</span>'
+          : r.status === '已退回'
+            ? '<span class="td-sub">等待重交</span>'
+            : `<button class="btn-link" data-sub="${r.submissionId}">${ICONS.edit}${r.status === '已批改' ? '重新批改' : '批改'}</button>`}
+        ${r.submissionId && r.status === '已批改'
+          ? `<button class="btn-link danger" data-return="${r.submissionId}">${ICONS.refresh}退回</button>` : ''}
       </td>
     </tr>`).join('') || emptyRow(7, '该班级暂无学员');
   const body = `
@@ -339,10 +313,36 @@ async function openSubmissions(a) {
     </table></div>`;
   openPortalModal(`提交情况 · ${a.title}`, body, '', async () => true);
   $('#subs-body')?.addEventListener('click', ev => {
+    const ret = ev.target.closest('button[data-return]');
+    if (ret) {
+      const row = data.rows.find(x => x.submissionId === ret.dataset.return);
+      if (row) openReturnForm(a, row);
+      return;
+    }
     const b = ev.target.closest('button[data-sub]');
     if (!b) return;
     const row = data.rows.find(x => x.submissionId === b.dataset.sub);
     if (row) openGradeForm(a, row);
+  });
+}
+
+function openReturnForm(a, row) {
+  const body = `
+    <div class="form-grid">
+      <div class="form-item full">
+        <label>${esc(row.studentName)} 的退回理由<span class="req">*</span></label>
+        <textarea class="input" id="r-reason" rows="3" maxlength="100"
+          placeholder="说明需要修改的地方（学员与家长可见，原成绩将作废）"></textarea>
+      </div>
+    </div>`;
+  openPortalModal(`退回作业 · ${row.studentName}`, body, '确认退回', async () => {
+    const reason = $('#r-reason').value.trim();
+    if (reason.length < 2) { showToast('请填写退回理由（至少 2 个字）', 'error'); return false; }
+    const ok = await apiOk(() => api.returnSubmission(row.submissionId, reason), '已退回，等待学员重交');
+    if (!ok) return false;
+    await reloadTeacherAssignments();
+    await openSubmissions(a);
+    return false;
   });
 }
 
@@ -446,6 +446,8 @@ async function saveAttendance() {
   await loadAttendance();
 }
 
+/* ---------- 教师：班级考勤统计 ---------- */
+
 async function openAttendanceSummary() {
   const classId = $('#att-class')?.value;
   if (!classId) { showToast('请先选择班级', 'error'); return; }
@@ -479,48 +481,39 @@ async function openAttendanceSummary() {
   await load();
 }
 
+function attSummaryChips(records) {
+  const counts = { 出勤: 0, 迟到: 0, 请假: 0, 缺勤: 0 };
+  records.forEach(r => { if (counts[r.status] !== undefined) counts[r.status] += 1; });
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  const rate = total ? Math.round((counts['出勤'] + counts['迟到']) / total * 100) : 0;
+  return `<div class="att-summary">
+    <span class="att-chip">出勤 <b>${counts['出勤']}</b></span>
+    <span class="att-chip">迟到 <b>${counts['迟到']}</b></span>
+    <span class="att-chip">请假 <b>${counts['请假']}</b></span>
+    <span class="att-chip">缺勤 <b>${counts['缺勤']}</b></span>
+    <span class="att-chip">出勤率 <b>${rate}%</b></span>
+  </div>`;
+}
+
 /* ============================================================
  * 学员
  * ============================================================ */
 
 async function initStudent(el) {
-  const [assignments, attendance, sessions] = await Promise.all([
+  const [assignments, attendance] = await Promise.all([
     api.studentAssignments(),
     api.studentAttendance(),
-    api.studentSessions(...portalRange(14)),
   ]);
   el.insertAdjacentHTML('beforeend', studentStatsHtml());
   el.insertAdjacentHTML('beforeend', studentInfoHtml());
-  el.insertAdjacentHTML('beforeend', studentTimetableHtml(sessions));
+  el.insertAdjacentHTML('beforeend', timetableHtml('我的课表'));
   el.insertAdjacentHTML('beforeend', `<div id="student-pay" style="margin-top:16px">${payLoadingCard('缴费明细')}</div>`);
   el.insertAdjacentHTML('beforeend', studentAssignmentsHtml(assignments));
   el.insertAdjacentHTML('beforeend', studentAttendanceHtml(attendance));
   $('#student-assignments')?.addEventListener('click', onStudentAssignmentAction);
   window.__studentAssignments = assignments;
   await loadStudentPayments();
-}
-
-function studentTimetableHtml(sessions) {
-  const rows = sessions.slice(0, 12).map(s => `
-    <tr>
-      <td class="td-sub" style="white-space:nowrap">${esc(s.date)}</td>
-      <td style="white-space:nowrap">${esc(s.startTime)}-${esc(s.endTime)}</td>
-      <td>${esc(s.className)}</td>
-      <td>${esc(s.topic || '—')}</td>
-      <td>${esc(s.teacherName || '—')}</td>
-      <td>${badge(s.displayStatus)}</td>
-    </tr>`).join('') || emptyRow(6, '近两周暂无课次');
-  return `
-    <div class="card reveal" data-d="3" style="margin-top:16px">
-      <div class="card-head">
-        <div class="card-title">${ICONS.calendar} 我的课表</div>
-        <div class="td-sub">近两周</div>
-      </div>
-      <div class="card-body"><div class="table-wrap"><table>
-        <thead><tr><th>日期</th><th>时间</th><th>班级</th><th>授课主题</th><th>教师</th><th>状态</th></tr></thead>
-        <tbody id="student-timetable">${rows}</tbody>
-      </table></div></div>
-    </div>`;
+  await initTimetable('我的课表');
 }
 
 function studentStatsHtml() {
@@ -565,26 +558,30 @@ function studentAssignmentsHtml(assignments) {
 }
 
 function studentAssignmentRows(assignments) {
-  return assignments.map(a => `
+  return assignments.map(a => {
+    const overdue = !!a.dueDate && todayStr() > a.dueDate && !a.allowLate;
+    const canSubmit = a.status === '进行中' && a.submitStatus !== '已批改' && !overdue;
+    return `
     <tr>
       <td>
         <div class="cell-main">${esc(a.title)}</div>
         <div class="td-sub clamp-2">${esc(a.content || '')}</div>
       </td>
       <td style="white-space:nowrap">${esc(a.teacherName || '–')}</td>
-      <td class="td-sub" style="white-space:nowrap">${esc(a.dueDate || '–')}</td>
+      <td class="td-sub" style="white-space:nowrap">${esc(a.dueDate || '–')}${a.allowLate ? '<div class="td-sub">允许迟交</div>' : ''}</td>
       <td>${badge(a.status)}</td>
-      <td>${badge(a.submitStatus)}</td>
+      <td>${badge(a.submitStatus)}${a.returnReason ? `<div class="td-sub">退回：${esc(a.returnReason)}</div>` : ''}</td>
       <td>${a.score == null ? '–' : a.score}</td>
       <td class="td-actions">
-        ${a.status === '进行中'
+        ${canSubmit
           ? `<button class="btn-link" data-act="submit" data-id="${a.id}">${ICONS.edit}${a.submissionId ? '重新提交' : '提交作业'}</button>`
-          : ''}
+          : (overdue && a.submitStatus !== '已批改' ? '<span class="td-sub">已截止</span>' : '')}
         ${a.submitStatus === '已批改'
           ? `<button class="btn-link success" data-act="view" data-id="${a.id}">${ICONS.eye}查看批改</button>`
           : ''}
       </td>
-    </tr>`).join('') || emptyRow(7, '本班暂无作业');
+    </tr>`;
+  }).join('') || emptyRow(7, '本班暂无作业');
 }
 
 function onStudentAssignmentAction(e) {
@@ -600,6 +597,11 @@ function onStudentAssignmentAction(e) {
 function openSubmitForm(a) {
   const body = `
     <div class="form-grid">
+      ${a.returnReason ? `
+      <div class="form-item full">
+        <label>教师退回理由</label>
+        <div class="input" style="height:auto;white-space:pre-wrap;background:var(--danger-bg);color:var(--danger)">${esc(a.returnReason)}</div>
+      </div>` : ''}
       <div class="form-item full">
         <label>作业要求</label>
         <div class="input" style="height:auto;max-height:160px;overflow:auto;white-space:pre-wrap;background:var(--bg-soft)">${esc(a.content || '（无附加要求）')}</div>
@@ -687,21 +689,16 @@ async function loadStudentPayments() {
 
 async function initParent(el) {
   CHILDREN = CTX.children || [];
-  [parentAssignments, parentAttendance, parentSessions] = await Promise.all([
+  [parentAssignments, parentAttendance] = await Promise.all([
     api.parentAssignments(),
     api.parentAttendance(),
-    api.parentSessions(null, ...portalRange(14)),
   ]);
   el.insertAdjacentHTML('beforeend', parentStatsHtml());
   el.insertAdjacentHTML('beforeend', parentChildrenHtml());
+  el.insertAdjacentHTML('beforeend', timetableHtml('孩子课表'));
   el.insertAdjacentHTML('beforeend', parentPaymentsHtml());
-  el.insertAdjacentHTML('beforeend', parentTimetableHtml());
   el.insertAdjacentHTML('beforeend', parentAssignmentsHtml());
   el.insertAdjacentHTML('beforeend', parentAttendanceHtml());
-  $('#parent-tt-filter')?.addEventListener('change', e => {
-    parentTtFilter = e.target.value;
-    renderParentTimetable();
-  });
   $('#parent-assign-filter')?.addEventListener('change', e => {
     parentChildFilter = e.target.value;
     renderParentAssignments();
@@ -711,44 +708,12 @@ async function initParent(el) {
     renderParentAttendance();
   });
   initParentPayments();
-}
-
-function parentTimetableHtml() {
-  return `
-    <div class="card reveal" data-d="2" style="margin-top:16px">
-      <div class="card-head">
-        <div class="card-title">${ICONS.calendar} 孩子课表</div>
-        ${childFilterHtml('parent-tt-filter')}
-      </div>
-      <div class="card-body"><div class="table-wrap"><table>
-        <thead><tr><th>学员</th><th>日期</th><th>时间</th><th>班级</th><th>授课主题</th><th>状态</th></tr></thead>
-        <tbody id="parent-timetable">${parentTimetableRows()}</tbody>
-      </table></div></div>
-    </div>`;
-}
-
-function parentTimetableRows() {
-  const list = parentTtFilter
-    ? parentSessions.filter(s => s.studentId === parentTtFilter)
-    : parentSessions;
-  return list.slice(0, 16).map(s => `
-    <tr>
-      <td>${esc(s.studentName)}</td>
-      <td class="td-sub" style="white-space:nowrap">${esc(s.date)}</td>
-      <td style="white-space:nowrap">${esc(s.startTime)}-${esc(s.endTime)}</td>
-      <td>${esc(s.className)}</td>
-      <td>${esc(s.topic || '—')}</td>
-      <td>${badge(s.displayStatus)}</td>
-    </tr>`).join('') || emptyRow(6, '近两周暂无课次');
-}
-
-function renderParentTimetable() {
-  const tbody = $('#parent-timetable');
-  if (tbody) tbody.innerHTML = parentTimetableRows();
+  await initTimetable('孩子课表');
 }
 
 function parentStatsHtml() {
-  const pending = parentAssignments.filter(a => a.assignmentStatus === '进行中' && a.submitStatus === '未提交').length;
+  const pending = parentAssignments.filter(a => a.assignmentStatus === '进行中'
+    && (a.submitStatus === '未提交' || a.submitStatus === '已退回')).length;
   const graded = parentAssignments.filter(a => a.submitStatus === '已批改').length;
   return `
     <div class="stat-grid">
@@ -811,7 +776,7 @@ function parentAssignmentRows() {
         <div class="td-sub">${badge(a.assignmentStatus)}</div>
       </td>
       <td class="td-sub" style="white-space:nowrap">${esc(a.dueDate || '–')}</td>
-      <td>${badge(a.submitStatus)}</td>
+      <td>${badge(a.submitStatus)}${a.returnReason ? `<div class="td-sub">退回：${esc(a.returnReason)}</div>` : ''}</td>
       <td>${a.score == null ? '–' : a.score}</td>
       <td class="td-sub">${esc(a.comment || '–')}</td>
     </tr>`).join('') || emptyRow(6, '暂无作业记录');
@@ -830,7 +795,7 @@ function parentAttendanceHtml() {
         ${childFilterHtml('parent-att-filter')}
       </div>
       <div class="card-body">
-        <div id="parent-att-summary">${attSummaryChips(parentAttendanceList())}</div>
+        ${attSummaryChips(parentAttendance)}
         <div class="table-wrap" style="margin-top:12px"><table>
           <thead><tr><th>学员</th><th>日期</th><th>班级</th><th>考勤状态</th><th>备注</th></tr></thead>
           <tbody id="parent-attendance">${parentAttendanceRows()}</tbody>
@@ -839,14 +804,11 @@ function parentAttendanceHtml() {
     </div>`;
 }
 
-function parentAttendanceList() {
-  return parentChildFilter
+function parentAttendanceRows() {
+  const list = parentChildFilter
     ? parentAttendance.filter(a => a.studentId === parentChildFilter)
     : parentAttendance;
-}
-
-function parentAttendanceRows() {
-  return parentAttendanceList().map(a => `
+  return list.map(a => `
     <tr>
       <td>${esc(a.studentName)}</td>
       <td class="td-sub" style="white-space:nowrap">${esc(a.date || '–')}</td>
@@ -859,8 +821,6 @@ function parentAttendanceRows() {
 function renderParentAttendance() {
   const tbody = $('#parent-attendance');
   if (tbody) tbody.innerHTML = parentAttendanceRows();
-  const summary = $('#parent-att-summary');
-  if (summary) summary.innerHTML = attSummaryChips(parentAttendanceList());
 }
 
 /* ---------- 家长 / 学员：缴费明细组件 ---------- */
@@ -983,6 +943,142 @@ function paySection(data, { title = '缴费明细' } = {}) {
 function payCell(label, value, tone = '') {
   return `<div class="pay-cell"><div class="pay-k">${esc(label)}</div>
     <div class="pay-v ${tone}">${esc(value)}</div></div>`;
+}
+
+/* ============================================================
+ * 课表（教师 / 学员 / 家长共用周视图）
+ * ============================================================ */
+
+function timetableHtml(title) {
+  return `
+    <div class="card reveal" data-d="2" style="margin-top:16px" id="timetable-card">
+      <div class="card-head">
+        <div class="card-title">${ICONS.calendar} ${esc(title)}</div>
+        <div class="tt-nav">
+          <button class="btn btn-ghost btn-sm" id="tt-prev" type="button">‹ 上一周</button>
+          <span class="tt-range" id="tt-range">–</span>
+          <button class="btn btn-ghost btn-sm" id="tt-next" type="button">下一周 ›</button>
+          <button class="btn btn-outline btn-sm" id="tt-today" type="button">本周</button>
+        </div>
+      </div>
+      <div class="card-body"><div class="timetable" id="tt-grid">${skeleton(3)}</div></div>
+    </div>`;
+}
+
+async function initTimetable(title) {
+  const card = $('#timetable-card');
+  if (!card) return;
+  TT.title = title || '我的课表';
+  TT.start = ttMonday(new Date());
+  $('#tt-prev').addEventListener('click', () => ttShift(-7));
+  $('#tt-next').addEventListener('click', () => ttShift(7));
+  $('#tt-today').addEventListener('click', () => { TT.start = ttMonday(new Date()); loadTimetable(); });
+  $('#tt-grid').addEventListener('click', e => {
+    const el = e.target.closest('.tt-session');
+    if (el) openSessionDetail(el.dataset.id);
+  });
+  await loadTimetable();
+}
+
+function ttShift(days) {
+  TT.start = ttAddDays(TT.start, days);
+  loadTimetable();
+}
+
+async function loadTimetable() {
+  const from = ttIso(TT.start);
+  const to = ttIso(ttAddDays(TT.start, 6));
+  const rangeEl = $('#tt-range');
+  if (rangeEl) rangeEl.textContent = `${from} ~ ${to}`;
+  const seq = ++TT.seq;
+  const identity = CTX.identity || USER.identity;
+  let sessions = [];
+  try {
+    if (identity === 'teacher') {
+      sessions = (await api.teacherTimetable({ from, to })).sessions || [];
+    } else if (identity === 'student') {
+      sessions = (await api.studentTimetable({ from, to })).sessions || [];
+    } else if (identity === 'parent') {
+      const groups = await Promise.all(CHILDREN.map(async c => {
+        try {
+          const data = await api.parentTimetable(c.studentId, { from, to });
+          return (data.sessions || []).map(s => ({ ...s, studentName: c.name }));
+        } catch (e) { return []; }
+      }));
+      sessions = groups.flat();
+    }
+  } catch (e) {
+    if (seq === TT.seq && $('#tt-grid')) {
+      $('#tt-grid').innerHTML = emptyState('warn', '课表加载失败', e.message);
+    }
+    return;
+  }
+  if (seq !== TT.seq) return;
+  TT.sessions = sessions;
+  renderTimetable();
+}
+
+function renderTimetable() {
+  const grid = $('#tt-grid');
+  if (!grid) return;
+  const today = todayStr();
+  grid.innerHTML = TT_WEEKDAYS.map((label, i) => {
+    const iso = ttIso(ttAddDays(TT.start, i));
+    const list = TT.sessions
+      .filter(s => s.sessionDate === iso)
+      .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+    return `
+      <div class="tt-day ${iso === today ? 'today' : ''}">
+        <div class="tt-day-head"><span>${label}</span><b>${ttShort(iso)}</b></div>
+        <div class="tt-day-body">${list.length ? list.map(ttSessionCard).join('') : '<div class="tt-empty">无课</div>'}</div>
+      </div>`;
+  }).join('');
+}
+
+function ttSessionCard(s) {
+  const status = s.status || '待上课';
+  const cls = status === '已取消' ? 'cancelled'
+    : status === '已调课' ? 'rescheduled'
+      : status === '已上课' ? 'done' : '';
+  return `
+    <div class="tt-session ${cls}" data-id="${esc(s.id)}" title="点击查看详情">
+      <div class="tt-time">${esc(s.startTime || '')}-${esc(s.endTime || '')}</div>
+      <div class="tt-name">${esc(s.className || '')}</div>
+      <div class="tt-sub">${esc(s.classroom || '教室待定')} · ${esc(s.teacherName || '')}</div>
+      <div class="tt-foot">${badge(status)}${s.homeworkCount ? `<span class="tt-hw">作业 ${s.homeworkCount}</span>` : ''}</div>
+      ${s.originalDate ? `<div class="tt-sub">原 ${esc(s.originalDate)} ${esc(s.originalStartTime || '')}</div>` : ''}
+      ${s.studentName ? `<div class="tt-student">${esc(s.studentName)}</div>` : ''}
+    </div>`;
+}
+
+function openSessionDetail(id) {
+  const s = TT.sessions.find(x => x.id === id);
+  if (!s) return;
+  const body = `
+    <div class="tt-detail">
+      <div><div class="k">班级</div><div class="v">${esc(s.className || '–')}</div></div>
+      <div><div class="k">课程</div><div class="v">${esc(s.courseName || '–')}</div></div>
+      <div><div class="k">日期</div><div class="v">${esc(s.sessionDate)} ${esc(s.weekdayLabel || '')}</div></div>
+      <div><div class="k">时间</div><div class="v">${esc(s.startTime)}-${esc(s.endTime)}</div></div>
+      <div><div class="k">教师</div><div class="v">${esc(s.teacherName || '–')}</div></div>
+      <div><div class="k">教室</div><div class="v">${esc(s.classroom || '–')}</div></div>
+      <div><div class="k">状态</div><div class="v">${badge(s.status)}</div></div>
+      <div><div class="k">关联作业</div><div class="v">${s.homeworkCount ? s.homeworkCount + ' 项' : '暂无'}</div></div>
+      ${s.studentName ? `<div><div class="k">学员</div><div class="v">${esc(s.studentName)}</div></div>` : ''}
+      ${s.originalDate ? `<div><div class="k">原时间</div><div class="v">${esc(s.originalDate)} ${esc(s.originalStartTime || '')}</div></div>` : ''}
+    </div>
+    ${(CTX.identity || USER.identity) === 'teacher' && s.status !== '已取消'
+      ? '<div style="margin-top:14px"><button class="btn btn-outline" id="tt-go-att">去考勤</button></div>' : ''}`;
+  openPortalModal('课次详情', body, '', async () => true);
+  $('#tt-go-att')?.addEventListener('click', () => {
+    const classSelect = $('#att-class');
+    const dateInput = $('#att-date');
+    if (classSelect) classSelect.value = s.classId;
+    if (dateInput) dateInput.value = s.sessionDate;
+    closeModal('portal-modal');
+    loadAttendance();
+    $('#att-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
 }
 
 /* ---------- 员工误入门户 ---------- */

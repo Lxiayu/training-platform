@@ -12,11 +12,21 @@ let ttSessions = [];
 let filterClass = '';
 let filterTeacher = '';
 let editingSession = null;
+let canWriteTimetable = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (!await boot('timetable')) return;
+  const user = await boot('timetable');
+  if (!user) return;
+  canWriteTimetable = canManageAcademic(user);
 
-  $('#tt-page-head').innerHTML = pageHead('课表', '按周查看班级课次，点击课次可维护授课主题与状态', '');
+  $('#tt-page-head').innerHTML = pageHead(
+    '课表',
+    canWriteTimetable
+      ? '按周查看班级课次，点击课次可维护授课主题与状态'
+      : '按周查看班级课次（只读）',
+    ''
+  );
+  if (!canWriteTimetable) $('#tt-generate').style.display = 'none';
   fillTtFilters();
   weekStart = mondayOf(new Date());
   bindTtEvents();
@@ -64,7 +74,9 @@ function bindTtEvents() {
     const card = e.target.closest('[data-session]');
     if (!card) return;
     const session = ttSessions.find(s => s.id === card.dataset.session);
-    if (session) openSessionEditor(session);
+    if (!session) return;
+    if (canWriteTimetable) openSessionEditor(session);
+    else openSessionView(session);
   });
 }
 
@@ -99,16 +111,15 @@ function renderWeek() {
   for (let i = 0; i < 7; i++) {
     const day = addDays(weekStart, i);
     const key = fmtDate(day);
-    const daySessions = list.filter(s => s.date === key)
+    const daySessions = list.filter(s => (s.date || s.sessionDate) === key)
       .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
     const cards = daySessions.map(sessionCard).join('') || '<div class="tt-empty">无课次</div>';
     cols.push(`
       <div class="tt-day ${key === todayStr ? 'today' : ''}">
         <div class="tt-day-head">
-          <span class="tt-day-name">${TT_DAY_NAMES[i]}</span>
-          <span class="tt-day-date">${key.slice(5)}</span>
+          <span>${TT_DAY_NAMES[i]}</span><b>${key.slice(5)}</b>
         </div>
-        ${cards}
+        <div class="tt-day-body">${cards}</div>
       </div>`);
   }
   $('#tt-week').innerHTML = cols.join('');
@@ -116,13 +127,15 @@ function renderWeek() {
 
 function sessionCard(s) {
   const topic = s.topic ? esc(s.topic) : '<span style="color:var(--muted)">未填写主题</span>';
+  const status = s.displayStatus || s.status || '待上课';
+  const cls = status === '已取消' ? 'cancelled' : status === '已上课' ? 'done' : '';
   return `
-    <div class="tt-session" data-session="${s.id}" title="点击维护课次">
-      <div class="tt-time">${esc(s.startTime)} - ${esc(s.endTime)}</div>
+    <div class="tt-session ${cls}" data-session="${s.id}" title="点击维护课次">
+      <div class="tt-time">${esc(s.startTime)}-${esc(s.endTime)}</div>
       <div class="tt-name">${esc(s.className)}</div>
-      <div class="tt-meta">${esc(s.teacherName || '')}${s.classroom ? ' · ' + esc(s.classroom) : ''}</div>
-      <div class="tt-meta">${topic}</div>
-      <div class="tt-status">${badge(s.displayStatus)}${s.attendanceSaved ? ' <span class="td-sub">已考勤</span>' : ''}</div>
+      <div class="tt-sub">${esc(s.teacherName || '')}${s.classroom ? ' · ' + esc(s.classroom) : ''}</div>
+      <div class="tt-sub">${topic}</div>
+      <div class="tt-foot">${badge(status)}${s.attendanceSaved ? '<span class="tt-hw">已考勤</span>' : ''}</div>
     </div>`;
 }
 
@@ -145,7 +158,7 @@ function openSessionEditor(s) {
       <div class="form-item">
         <label>课次状态</label>
         <select class="select" id="ts-status">
-          ${['待上课', '已完成', '已取消'].map(st => `<option ${st === s.status ? 'selected' : ''}>${st}</option>`).join('')}
+          ${['待上课', '已上课', '已取消'].map(st => `<option ${st === s.status ? 'selected' : ''}>${st}</option>`).join('')}
         </select>
       </div>
     </div>`;
@@ -158,6 +171,23 @@ function openSessionEditor(s) {
     await loadWeek();
     return true;
   });
+}
+
+function openSessionView(s) {
+  const att = s.attendance || {};
+  const body = `
+    <div class="tt-detail">
+      <div><div class="k">班级</div><div class="v">${esc(s.className)}</div></div>
+      <div><div class="k">课程</div><div class="v">${esc(s.courseName || '–')}</div></div>
+      <div><div class="k">日期</div><div class="v">${esc(s.date)}</div></div>
+      <div><div class="k">时间</div><div class="v">${esc(s.startTime)}-${esc(s.endTime)}</div></div>
+      <div><div class="k">教师</div><div class="v">${esc(s.teacherName || '–')}</div></div>
+      <div><div class="k">教室</div><div class="v">${esc(s.classroom || '–')}</div></div>
+      <div><div class="k">状态</div><div class="v">${badge(s.displayStatus || s.status)}</div></div>
+      <div><div class="k">授课主题</div><div class="v">${esc(s.topic || '未填写')}</div></div>
+      <div><div class="k">考勤</div><div class="v">${s.attendanceSaved ? `出勤 ${att['出勤']} / 迟到 ${att['迟到']} / 请假 ${att['请假']} / 缺勤 ${att['缺勤']}` : '尚未录入'}</div></div>
+    </div>`;
+  openTtModal('课次详情（只读）', body, '', async () => true);
 }
 
 /* ---------- 补齐课表 ---------- */
@@ -197,7 +227,8 @@ function openTtModal(title, bodyHtml, submitText, onSubmit) {
   $('#ttm-title').textContent = title;
   $('#ttm-body').innerHTML = bodyHtml;
   const btn = $('#ttm-submit');
-  btn.textContent = submitText;
+  btn.textContent = submitText || '';
+  btn.style.display = submitText ? '' : 'none';
   btn.onclick = async () => {
     btn.disabled = true;
     try {

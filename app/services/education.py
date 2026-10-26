@@ -4,7 +4,6 @@ from typing import Any
 from app.core.exceptions import BizException
 from app.db.repository import db
 from app.services.base import CrudService, today
-from app.services.schedule import ScheduleService
 
 
 class CourseService(CrudService):
@@ -56,11 +55,10 @@ class ClassService(CrudService):
         if not data.get("startDate"):
             data["startDate"] = today()
         record = super().create(data)
-        # 按周排课规则自动生成课表；解析失败不影响开班（可在课表页手动处理）
-        try:
-            ScheduleService().generate_for_class(record["id"])
-        except BizException:
-            pass
+        # 新班级按「上课时间」文本自动建立排课规则与整个学期的课次
+        from app.services.schedule import ScheduleService
+
+        ScheduleService().bootstrap_class(record, full=True)
         return record
 
     def update(self, code: str, data: dict[str, Any]) -> dict:
@@ -73,11 +71,45 @@ class ClassService(CrudService):
             if teacher.get("status") != "在职":
                 raise BizException(409, f"教师「{teacher['name']}」已离职，无法任教")
         before = db.locate("classes", code, label="班级")
-        record = super().update(code, data)
-        schedule_fields = ("schedule", "startDate", "endDate", "classroom", "teacherId")
-        if any(field in data and data[field] != before.get(field) for field in schedule_fields):
-            ScheduleService().sync_for_class(code)
-        return record
+        rec = super().update(code, data)
+        from app.services.schedule import ScheduleService
+
+        schedule_service = ScheduleService()
+        teacher_changed = bool(data.get("teacherId") and data["teacherId"] != before.get("teacherId"))
+        schedule_changed = data.get("schedule") is not None and data["schedule"] != before.get("schedule")
+        window_changed = any(
+            data.get(field) is not None and data[field] != before.get(field)
+            for field in ("startDate", "endDate")
+        )
+        classroom_changed = data.get("classroom") is not None and data["classroom"] != before.get("classroom")
+        if teacher_changed:
+            schedule_service.reassign_teacher(code, data["teacherId"])
+        if classroom_changed:
+            # 规则里仍是旧教室时，跟随班级一起更新
+            for rule in db.alive("classSchedules"):
+                if (rule.get("classId") == code
+                        and (rule.get("classroom") or "") == (before.get("classroom") or "")):
+                    db.update_fields(
+                        "classSchedules", rule["id"],
+                        {"classroom": rec.get("classroom") or ""}, label="排课规则",
+                    )
+        if schedule_changed:
+            # 文本排课是简写入口：文本变化时按新文本重建规则，再重建未来课次
+            schedule_service.rebuild_rules_from_text(rec)
+            schedule_service.regenerate_future(code)
+        elif window_changed or classroom_changed or teacher_changed:
+            schedule_service.regenerate_future(code)
+        return rec
+
+    def delete(self, code: str) -> None:
+        super().delete(code)
+        # 级联归档该班级的排课规则与课次，避免课表出现无主数据
+        for rule in db.alive("classSchedules"):
+            if rule.get("classId") == code:
+                db.soft_delete("classSchedules", rule["id"], label="排课规则")
+        for session in db.alive("classSessions"):
+            if session.get("classId") == code:
+                db.soft_delete("classSessions", session["id"], label="课次")
 
     def _before_delete(self, code: str) -> None:
         students = [s for s in db.alive("students") if s.get("classId") == code]

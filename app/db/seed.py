@@ -20,6 +20,8 @@ from app.db.models import (
     Attendance,
     Bill,
     Class,
+    ClassSchedule,
+    ClassSession,
     Config,
     Course,
     News,
@@ -31,6 +33,7 @@ from app.db.models import (
     Teacher,
 )
 from app.db.session import SessionLocal
+from app.services.scheduling import expand_dates, parse_date, parse_schedule_text, session_status
 
 import json as _json
 
@@ -170,19 +173,19 @@ def _stamp() -> str:
 _ASSIGNMENTS: list[dict[str, Any]] = [
     {"id": "HW001", "classId": "BJ002", "teacherId": "JS001", "title": "第 4 讲课后练习：循环与条件判断",
      "content": "完成课本第 4 章练习 1-3：用 for/while 输出乘法表，并判断一个年份是否为闰年。提交代码与运行结果截图说明。",
-     "dueDate": "2026-10-25", "status": "进行中"},
+     "dueDate": "2026-11-01", "status": "进行中"},
     {"id": "HW002", "classId": "BJ002", "teacherId": "JS001", "title": "阶段小测：列表与字典",
      "content": "实现学生成绩录入与统计：用列表保存成绩，用字典统计各分数段人数。",
      "dueDate": "2026-10-18", "status": "已结束"},
     {"id": "HW003", "classId": "BJ003", "teacherId": "JS001", "title": "周五晚班：函数练习",
      "content": "编写 3 个函数：求最大值、判断素数、字符串反转，并各写一个调用示例。",
-     "dueDate": "2026-10-24", "status": "进行中"},
+     "dueDate": "2026-11-06", "status": "进行中"},
     {"id": "HW004", "classId": "BJ001", "teacherId": "JS002", "title": "Scratch 角色移动小练习",
      "content": "让小猫按键盘方向键移动，碰到边缘时反弹，并说出「到边界啦」。",
-     "dueDate": "2026-10-26", "status": "进行中"},
+     "dueDate": "2026-10-30", "status": "进行中"},
     {"id": "HW005", "classId": "BJ004", "teacherId": "JS003", "title": "CSP-J 模拟题第一套",
      "content": "完成模拟题第一套的选择题与两道编程题，注意时间复杂度。",
-     "dueDate": "2026-10-28", "status": "进行中"},
+     "dueDate": "2026-11-08", "allowLate": True, "status": "进行中"},
 ]
 
 # 作业提交 / 批改
@@ -247,6 +250,35 @@ def _make_account(
     )
 
 
+def _seed_schedules(session, ts: str) -> None:
+    """按班级「上课时间」文本生成排课规则与整个学期的课次（种子数据）。"""
+    today_date = date.today()
+    rule_no = 0
+    session_no = 0
+    for cls in _CLASSES:
+        specs = parse_schedule_text(cls.get("schedule"))
+        start = parse_date(cls["startDate"], label="开班日期")
+        end = parse_date(cls["endDate"], label="结课日期")
+        for spec in specs:
+            rule_no += 1
+            session.add(ClassSchedule(
+                id=f"PB{rule_no:03d}", classId=cls["id"], weekday=spec["weekday"],
+                startTime=spec["startTime"], endTime=spec["endTime"],
+                effectiveFrom=cls["startDate"], effectiveTo=cls["endDate"],
+                classroom=cls.get("classroom") or "", createdAt=ts, updatedAt=ts,
+            ))
+        for spec in specs:
+            for day in expand_dates(spec["weekday"], start, end):
+                session_no += 1
+                session.add(ClassSession(
+                    id=f"SK{session_no:03d}", classId=cls["id"], teacherId=cls["teacherId"],
+                    sessionDate=day.isoformat(), startTime=spec["startTime"],
+                    endTime=spec["endTime"], classroom=cls.get("classroom") or "",
+                    topic=None, status=session_status(day, today_date), source="auto",
+                    createdAt=ts, updatedAt=ts,
+                ))
+
+
 def seed_db() -> None:
     """将完整种子数据写入数据库（reset_schema 之后调用）。"""
     ts = _stamp()
@@ -305,6 +337,8 @@ def seed_db() -> None:
             s.add(Course(**{**c, "createdAt": ts, "updatedAt": ts}))
         for c in _CLASSES:
             s.add(Class(**{**c, "createdAt": ts, "updatedAt": ts}))
+        # 排课规则与课次：解析班级的上课时间文本，按起止日期生成整个学期的课次
+        _seed_schedules(s, ts)
         for st in _STUDENTS:
             s.add(Student(**{**st, "createdAt": ts, "updatedAt": ts}))
 

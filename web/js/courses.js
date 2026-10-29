@@ -173,7 +173,7 @@ function renderProposals() {
 
   $('#proposal-body').innerHTML = list.length ? list.map(p => `
     <tr>
-      <td>
+      <td style="white-space:nowrap">
         <div class="cell-main">${esc(p.teacherName || p.teacherId)}</div>
         <div class="td-sub">${esc(p.teacherSubject || '')}</div>
       </td>

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.pagination import Pagination
 from app.core.config import ROLE_ACADEMIC, ROLE_ADMIN, ROLE_FRONTDESK
-from app.core.deps import get_current_user, require_parent, require_roles, require_student
+from app.core.deps import get_current_user, require_parent, require_roles, require_staff, require_student
 from app.core.exceptions import BizException
 from app.core.response import ok
 from app.db.repository import db
@@ -51,7 +51,7 @@ def catalog(
 # ---------- 员工：选课管理 ----------
 
 @router.get("/enrollments/stats")
-def enrollment_stats(_user: dict = Depends(staff_only)):
+def enrollment_stats(_user: dict = Depends(require_staff)):
     return ok(service.stats())
 
 
@@ -61,7 +61,7 @@ def list_enrollments(
     status: str | None = Query(default=None),
     classId: str | None = Query(default=None),
     keyword: str | None = Query(default=None),
-    _user: dict = Depends(staff_only),
+    _user: dict = Depends(require_staff),
 ):
     return ok(service.list(
         status=status, class_id=classId, keyword=keyword,

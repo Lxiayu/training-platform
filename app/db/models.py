@@ -82,7 +82,36 @@ class Course(Base):
     price = Column(Numeric(12, 2), nullable=False, default=0)
     target = Column(String(128), nullable=True)
     desc = Column(Text, nullable=True)
+    teacherId = Column(String(16), nullable=True)   # 负责 / 默认授课教师（开班时带出）
     status = Column(String(8), nullable=False, default="在售")
+    createdAt = Column(String(32), nullable=True)
+    updatedAt = Column(String(32), nullable=True)
+    deletedAt = Column(String(32), nullable=True)
+
+
+class CourseProposal(Base):
+    """教师开课申请：教师提出新课，教务 / 超管审核通过后自动创建课程。
+
+    - ``status``：待审核 / 已通过 / 已驳回 / 已撤回；
+    - 审核通过时写入 ``courseId``，课程负责人默认为申请教师；
+    - 同一教师可提交多条申请，不做唯一约束（同名课程可能在不同学期开设）。
+    """
+    __tablename__ = "course_proposals"
+    id = Column(String(16), primary_key=True)        # 申请编号 KK001
+    teacherId = Column(String(16), nullable=False, index=True)
+    name = Column(String(128), nullable=False)
+    category = Column(String(32), nullable=False)
+    level = Column(String(16), nullable=False, default="入门")
+    hours = Column(Integer, nullable=False, default=0)
+    price = Column(Numeric(12, 2), nullable=False, default=0)
+    target = Column(String(128), nullable=True)
+    desc = Column(Text, nullable=True)
+    preferredSchedule = Column(String(128), nullable=True)  # 意向上课时间
+    status = Column(String(16), nullable=False, default="待审核")
+    reviewNote = Column(String(256), nullable=True)
+    reviewedBy = Column(String(32), nullable=True)
+    reviewedAt = Column(String(32), nullable=True)
+    courseId = Column(String(16), nullable=True)      # 审核通过后生成的课程
     createdAt = Column(String(32), nullable=True)
     updatedAt = Column(String(32), nullable=True)
     deletedAt = Column(String(32), nullable=True)

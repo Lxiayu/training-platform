@@ -11,10 +11,50 @@ class CourseService(CrudService):
     coll = "courses"
     prefix = "KC"
     label = "课程"
-    search_fields = ("id", "name", "category", "level", "target")
+    search_fields = ("id", "name", "category", "level", "target", "teacherId")
 
     def list(self, *, category: str | None = None, level: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"category": category, "level": level}, **kwargs)
+
+    def _match(self, row: dict, kw: str) -> bool:
+        if super()._match(row, kw):
+            return True
+        teacher = db.find("teachers", row.get("teacherId") or "")
+        return bool(teacher and kw in str(teacher.get("name") or "").lower())
+
+    def decorate(self, row: dict) -> dict:
+        teacher = db.find("teachers", row.get("teacherId") or "")
+        return {**row, "teacherName": teacher["name"] if teacher else ""}
+
+    def _validate_teacher(self, teacher_id: str | None) -> None:
+        if not teacher_id:
+            return
+        teacher = db.locate("teachers", teacher_id, label="授课教师")
+        if teacher.get("status") != "在职":
+            raise BizException(409, f"教师「{teacher['name']}」已离职，不能担任课程负责人")
+
+    def create(self, data: dict[str, Any]) -> dict:
+        data = {**data}
+        self._validate_teacher(data.get("teacherId"))
+        return super().create(data)
+
+    def update(self, code: str, data: dict[str, Any]) -> dict:
+        if "teacherId" in data:
+            self._validate_teacher(data.get("teacherId"))
+            if data.get("teacherId") is None:
+                # 显式清空负责人：CrudService 会过滤 None，这里单独落库
+                from app.core.config import now_iso
+
+                rest = {k: v for k, v in data.items() if k != "teacherId" and v is not None}
+                rec = db.update_fields(
+                    "courses", code,
+                    {"teacherId": None, "updatedAt": now_iso()},
+                    label=self.label,
+                )
+                if rest:
+                    rec = super().update(code, rest)
+                return self.decorate(rec)
+        return super().update(code, data)
 
     def _before_delete(self, code: str) -> None:
         used = [c for c in db.alive("classes") if c.get("courseId") == code]

@@ -29,6 +29,7 @@ from app.db.models import (
     ClassSession,
     Config,
     Course,
+    CourseProposal,
     Enrollment,
     News,
     Payment,
@@ -45,6 +46,7 @@ MODELS: dict[str, type] = {
     "users": Account,        # 登录账户集合（四类身份统一存放）
     "teachers": Teacher,
     "courses": Course,
+    "courseProposals": CourseProposal,
     "classes": Class,
     "classSchedules": ClassSchedule,
     "classSessions": ClassSession,

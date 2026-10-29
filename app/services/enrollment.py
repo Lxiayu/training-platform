@@ -361,6 +361,10 @@ class EnrollmentService(CrudService):
             )
             return self.decorate(updated)
 
+        stu = db.find("students", rec.get("studentId") or "")
+        if stu and stu.get("status") == "已结课":
+            raise BizException(409, "该学员已结课，无法通过选课申请")
+
         self._ensure_seat(rec)
         conflict = conflict_class(rec.get("studentId") or "", rec.get("classId") or "")
         if conflict:
@@ -503,6 +507,9 @@ class EnrollmentService(CrudService):
         for cand in candidates:
             if capacity > 0 and enrolled_count(class_id) >= capacity:
                 return None
+            stu = db.find("students", cand.get("studentId") or "")
+            if stu and stu.get("status") == "已结课":
+                continue
             if conflict_class(cand.get("studentId") or "", class_id):
                 continue
             return self.decorate(self._approve(cand, staff_code, "候补顺延自动通过"))

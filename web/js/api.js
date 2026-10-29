@@ -140,6 +140,26 @@ const api = {
     return request('POST', '/users/' + encodeURIComponent(username) + '/reset-password');
   },
 
+  /* 开课申请（教师提交 / 教务审核） */
+  teacherCourseProposals() {
+    return request('GET', '/portal/teacher/course-proposals');
+  },
+  applyCourseProposal(data) {
+    return request('POST', '/portal/teacher/course-proposals', data);
+  },
+  cancelCourseProposal(id) {
+    return request('DELETE', '/portal/teacher/course-proposals/' + encodeURIComponent(id));
+  },
+  courseProposals(params) {
+    return request('GET', '/course-proposals' + qs({ page: 1, pageSize: 100, ...params }));
+  },
+  courseProposalStats() {
+    return request('GET', '/course-proposals/stats');
+  },
+  reviewCourseProposal(id, action, note) {
+    return request('POST', '/course-proposals/' + encodeURIComponent(id) + '/review', { action, note });
+  },
+
   /* 缴费专用 */
   paymentStats() {
     return request('GET', '/payments/stats');

@@ -13,6 +13,7 @@ let USER = null;
 let CTX = null;
 let CLASSES = [];
 let ASSIGNMENTS = [];
+let TEACHER_PROPOSALS = [];
 let CHILDREN = [];
 let parentAssignments = [];
 let parentAttendance = [];
@@ -87,13 +88,21 @@ function openPortalModal(title, bodyHtml, submitText, onSubmit) {
 
 async function initTeacher(el) {
   CLASSES = CTX.classes || [];
-  ASSIGNMENTS = await api.teacherAssignments();
+  const [assignments, proposals] = await Promise.all([
+    api.teacherAssignments(),
+    api.teacherCourseProposals().catch(() => []),
+  ]);
+  ASSIGNMENTS = assignments;
+  TEACHER_PROPOSALS = proposals || [];
   el.insertAdjacentHTML('beforeend', teacherStatsHtml());
   el.insertAdjacentHTML('beforeend', timetableHtml('我的课表'));
   el.insertAdjacentHTML('beforeend', teacherClassesHtml());
+  el.insertAdjacentHTML('beforeend', teacherProposalsHtml());
   el.insertAdjacentHTML('beforeend', teacherAssignmentsHtml());
   el.insertAdjacentHTML('beforeend', teacherAttendanceHtml());
 
+  $('#btn-new-proposal')?.addEventListener('click', openProposalForm);
+  $('#proposal-list')?.addEventListener('click', onProposalAction);
   $('#btn-new-assignment')?.addEventListener('click', () => openAssignmentEditor(null));
   $('#assignment-list')?.addEventListener('click', onAssignmentAction);
   $('#att-class')?.addEventListener('change', loadAttendance);
@@ -136,6 +145,126 @@ function teacherClassesHtml() {
         <tbody>${rows}</tbody>
       </table></div></div>
     </div>`;
+}
+
+function teacherProposalsHtml() {
+  return `
+    <div class="card reveal" data-d="2" style="margin-top:16px">
+      <div class="card-head">
+        <div class="card-title">${ICONS.filetext} 开课申请</div>
+        <button class="btn btn-sm" id="btn-new-proposal">${ICONS.plus} 申请开课</button>
+      </div>
+      <div class="card-body"><div class="table-wrap"><table>
+        <thead><tr><th>课程名称</th><th>分类 / 级别</th><th>课时 / 学费</th><th>意向时间</th><th>状态</th><th>审核意见</th><th>操作</th></tr></thead>
+        <tbody id="proposal-list">${teacherProposalRows()}</tbody>
+      </table></div></div>
+    </div>`;
+}
+
+function teacherProposalRows() {
+  return TEACHER_PROPOSALS.map(p => `
+    <tr>
+      <td>
+        <div class="cell-main">${esc(p.name)}</div>
+        <div class="td-sub clamp-2">${esc(p.target || p.desc || '')}</div>
+      </td>
+      <td>${esc(p.category)}<div class="td-sub">${esc(p.level || '')}</div></td>
+      <td>${p.hours} 课时<div class="td-sub">${money(p.price)}</div></td>
+      <td class="td-sub">${esc(p.preferredSchedule || '待定')}</td>
+      <td>${badge(p.status)}${p.courseId ? `<div class="td-sub">${esc(p.courseId)}</div>` : ''}</td>
+      <td class="td-sub clamp-2">${esc(p.reviewNote || '—')}</td>
+      <td class="td-actions">
+        ${p.status === '待审核'
+          ? `<button class="btn-link danger" data-act="cancel" data-id="${p.id}">${ICONS.x}撤回</button>` : ''}
+      </td>
+    </tr>`).join('') || emptyRow(7, '还没有开课申请，可点击右上角「申请开课」');
+}
+
+async function reloadTeacherProposals() {
+  try {
+    TEACHER_PROPOSALS = await api.teacherCourseProposals();
+  } catch (e) {
+    TEACHER_PROPOSALS = [];
+  }
+  const tbody = $('#proposal-list');
+  if (tbody) tbody.innerHTML = teacherProposalRows();
+}
+
+function openProposalForm() {
+  const body = `
+    <div class="form-grid">
+      <div class="form-item full">
+        <label>课程名称<span class="req">*</span></label>
+        <input class="input" id="p-name" maxlength="64" placeholder="如：Web 前端进阶：Vue 3 实战">
+      </div>
+      <div class="form-item">
+        <label>课程分类<span class="req">*</span></label>
+        <select class="select" id="p-cat">
+          <option>Scratch</option><option>Python</option><option>C++</option>
+          <option>人工智能</option><option>Web</option><option>机器人</option><option>Java</option><option>其他</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>课程级别</label>
+        <select class="select" id="p-level">
+          <option>启蒙</option><option>入门</option><option selected>进阶</option><option>竞赛</option>
+        </select>
+      </div>
+      <div class="form-item">
+        <label>课时数<span class="req">*</span></label>
+        <input class="input" id="p-hours" type="number" min="1" max="999" placeholder="如：48">
+      </div>
+      <div class="form-item">
+        <label>建议学费（元）<span class="req">*</span></label>
+        <input class="input" id="p-price" type="number" min="0" placeholder="如：5600">
+      </div>
+      <div class="form-item full">
+        <label>适学对象</label>
+        <input class="input" id="p-target" maxlength="128" placeholder="如：12 岁以上，已掌握 HTML/CSS/JS">
+      </div>
+      <div class="form-item full">
+        <label>意向上课时间</label>
+        <input class="input" id="p-schedule" maxlength="128" placeholder="如：周日 14:00-17:00">
+      </div>
+      <div class="form-item full">
+        <label>课程简介</label>
+        <textarea class="input" id="p-desc" rows="4" placeholder="课程内容、教学目标与考核方式"></textarea>
+      </div>
+      <div class="form-item full">
+        <div class="td-sub">提交后由教务 / 超管审核；通过后自动创建课程，您将作为课程负责人。</div>
+      </div>
+    </div>`;
+  openPortalModal('申请开课', body, '提交申请', async () => {
+    const payload = {
+      name: $('#p-name').value.trim(),
+      category: $('#p-cat').value,
+      level: $('#p-level').value,
+      hours: Number($('#p-hours').value),
+      price: Number($('#p-price').value),
+      target: $('#p-target').value.trim(),
+      preferredSchedule: $('#p-schedule').value.trim(),
+      desc: $('#p-desc').value.trim(),
+    };
+    if (!payload.name) { showToast('请填写课程名称', 'error'); return false; }
+    if (!payload.hours || payload.hours <= 0) { showToast('请填写正确的课时数', 'error'); return false; }
+    if (Number.isNaN(payload.price) || payload.price < 0) { showToast('请填写正确的学费', 'error'); return false; }
+    const data = await apiOk(() => api.applyCourseProposal(payload));
+    if (!data) return false;
+    showToast('开课申请已提交，等待教务审核');
+    await reloadTeacherProposals();
+    return true;
+  });
+}
+
+function onProposalAction(e) {
+  const btn = e.target.closest('button[data-act="cancel"]');
+  if (!btn) return;
+  const p = TEACHER_PROPOSALS.find(x => x.id === btn.dataset.id);
+  if (!p) return;
+  askConfirm('撤回开课申请', `确定撤回「${p.name}」的开课申请吗？撤回后可重新提交。`, async () => {
+    if (!await apiOk(() => api.cancelCourseProposal(p.id), '申请已撤回')) return;
+    await reloadTeacherProposals();
+  });
 }
 
 function teacherAssignmentsHtml() {

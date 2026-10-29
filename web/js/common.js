@@ -170,7 +170,8 @@ const BADGE_MAP = {
   '出勤': 'success', '迟到': 'warning', '请假': 'info', '缺勤': 'danger',
   '待上课': 'info', '已上课': 'success', '已完成': 'success', '已取消': 'gray', '已调课': 'warning', '待考勤': 'warning',
   '待缴': 'warning', '部分缴': 'info', '已缴': 'success', '已逾期': 'danger',
-  '待审核': 'warning', '已通过': 'success', '已驳回': 'danger', '已退课': 'gray', '候补': 'info'
+  '待审核': 'warning', '已通过': 'success', '已驳回': 'danger', '已退课': 'gray', '候补': 'info',
+  '已撤回': 'gray'
 
 };
 function badge(text) { return `<span class="badge badge-${BADGE_MAP[text] || 'gray'}">${esc(text)}</span>`; }

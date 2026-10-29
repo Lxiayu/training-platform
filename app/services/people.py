@@ -220,6 +220,27 @@ class TeacherService(CrudService):
     def list(self, *, subject: str | None = None, **kwargs) -> dict:
         return super().list(extra_filters={"subject": subject} if subject else None, **kwargs)
 
+    def decorate(self, row: dict) -> dict:
+        courses = [c for c in db.alive("courses") if c.get("teacherId") == row.get("id")]
+        return {
+            **row,
+            "courseCount": len(courses),
+            "courseNames": [c["name"] for c in courses],
+        }
+
+    def update(self, code: str, data: dict) -> dict:
+        if data.get("status") == "离职":
+            active = [
+                c for c in db.alive("classes")
+                if c.get("teacherId") == code and c.get("status") != "已结课"
+            ]
+            if active:
+                raise BizException(
+                    409,
+                    f"该教师仍负责 {len(active)} 个未结课班级，请先在班级管理中调整任教教师",
+                )
+        return super().update(code, data)
+
     def _before_delete(self, code: str) -> None:
         used = [c for c in db.alive("classes") if c.get("teacherId") == code]
         if used:

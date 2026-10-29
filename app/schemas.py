@@ -313,6 +313,30 @@ class SessionUpdate(CamelModel):
     classroom: str | None = Field(default=None, max_length=32)
 
 
+# ---------- 选课 ----------
+
+class EnrollmentApply(CamelModel):
+    class_id: str
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ParentEnrollmentApply(CamelModel):
+    student_id: str
+    class_id: str
+    note: str | None = Field(default=None, max_length=200)
+
+
+class StaffEnrollmentCreate(CamelModel):
+    student_id: str
+    class_id: str
+    note: str | None = Field(default=None, max_length=200)
+
+
+class EnrollmentReview(CamelModel):
+    action: str = Field(pattern=r"^(approve|reject)$")
+    note: str | None = Field(default=None, max_length=200)
+
+
 # ---------- 系统设置 ----------
 
 class SettingsUpdate(CamelModel):

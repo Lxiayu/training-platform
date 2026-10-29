@@ -24,6 +24,7 @@ from app.db.models import (
     ClassSession,
     Config,
     Course,
+    Enrollment,
     News,
     Payment,
     Resource,
@@ -167,6 +168,35 @@ _RESOURCES: list[dict[str, Any]] = [
 
 def _stamp() -> str:
     return now_iso()
+
+
+def _at(day: str, hhmm: str = "10:00") -> str:
+    """构造与 now_iso 同格式的演示时间戳（用于选课记录排序）。"""
+    return f"{day}T{hhmm}:00+08:00"
+
+
+# 选课记录：存量学员的入班记录（已通过）+ 若干待审核 / 已驳回申请，供演示审核流程
+_ENROLLMENTS: list[dict[str, Any]] = [
+    *[
+        {"id": f"XK{idx:03d}", "studentId": st["id"], "classId": st["classId"], "status": "已通过",
+         "source": "员工", "note": "", "reviewNote": "历史报名补录", "reviewedBy": "admin",
+         "reviewedAt": _at(st["enrollDate"]), "waitlistNo": None, "createdAt": _at(st["enrollDate"])}
+        for idx, st in enumerate(_STUDENTS, start=1)
+    ],
+    {"id": "XK017", "studentId": "XS005", "classId": "BJ001", "status": "待审核",
+     "source": "学员", "note": "想同时学 Scratch 打基础", "reviewNote": None, "reviewedBy": None,
+     "reviewedAt": None, "waitlistNo": None, "createdAt": _at("2026-10-26", "20:15")},
+    {"id": "XK018", "studentId": "XS006", "classId": "BJ004", "status": "待审核",
+     "source": "家长", "note": "孩子想冲 CSP-J，麻烦老师评估", "reviewNote": None, "reviewedBy": None,
+     "reviewedAt": None, "waitlistNo": None, "createdAt": _at("2026-10-27", "09:40")},
+    {"id": "XK019", "studentId": "XS007", "classId": "BJ005", "status": "已驳回",
+     "source": "学员", "note": "", "reviewNote": "该班与现有 Python 班时间冲突，建议改报周六下午班",
+     "reviewedBy": "jiaowu", "reviewedAt": _at("2026-10-25", "15:20"), "waitlistNo": None,
+     "createdAt": _at("2026-10-24", "18:05")},
+    {"id": "XK020", "studentId": "XS010", "classId": "BJ005", "status": "待审核",
+     "source": "家长", "note": "对 AI 课程感兴趣", "reviewNote": None, "reviewedBy": None,
+     "reviewedAt": None, "waitlistNo": None, "createdAt": _at("2026-10-28", "11:30")},
+]
 
 
 # 作业（教师面向班级布置）
@@ -380,4 +410,6 @@ def seed_db() -> None:
             s.add(Submission(**{**sub, "createdAt": ts, "updatedAt": ts}))
         for att in _ATTENDANCE:
             s.add(Attendance(**{**att, "createdAt": ts, "updatedAt": ts}))
+        for e in _ENROLLMENTS:
+            s.add(Enrollment(**{**e, "updatedAt": e["createdAt"]}))
         s.commit()

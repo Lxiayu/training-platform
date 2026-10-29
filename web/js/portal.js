@@ -17,6 +17,12 @@ let CHILDREN = [];
 let parentAssignments = [];
 let parentAttendance = [];
 let parentChildFilter = '';
+let studentCatalog = [];
+let studentEnrollments = [];
+let parentCatalog = [];
+let parentEnrollments = [];
+let parentEnrollChild = '';
+
 
 /* ---------- 课表状态与日期工具 ---------- */
 const TT = { start: null, sessions: [], seq: 0, title: '我的课表' };
@@ -500,20 +506,200 @@ function attSummaryChips(records) {
  * ============================================================ */
 
 async function initStudent(el) {
-  const [assignments, attendance] = await Promise.all([
+  const [assignments, attendance, catalog, enrollments] = await Promise.all([
     api.studentAssignments(),
     api.studentAttendance(),
+    api.catalog(),
+    api.myEnrollments(),
+
   ]);
+  studentCatalog = catalog;
+  studentEnrollments = enrollments;
   el.insertAdjacentHTML('beforeend', studentStatsHtml());
   el.insertAdjacentHTML('beforeend', studentInfoHtml());
   el.insertAdjacentHTML('beforeend', timetableHtml('我的课表'));
+  el.insertAdjacentHTML('beforeend', studentCatalogHtml());
+  el.insertAdjacentHTML('beforeend', studentEnrollmentsHtml());
+
   el.insertAdjacentHTML('beforeend', `<div id="student-pay" style="margin-top:16px">${payLoadingCard('缴费明细')}</div>`);
   el.insertAdjacentHTML('beforeend', studentAssignmentsHtml(assignments));
   el.insertAdjacentHTML('beforeend', studentAttendanceHtml(attendance));
   $('#student-assignments')?.addEventListener('click', onStudentAssignmentAction);
+  $('#student-catalog')?.addEventListener('click', onStudentCatalogAction);
+  $('#student-enrollments')?.addEventListener('click', onStudentEnrollmentAction);
+  $('#catalog-cat')?.addEventListener('change', renderStudentCatalog);
   window.__studentAssignments = assignments;
   await loadStudentPayments();
   await initTimetable('我的课表');
+}
+
+/* ---------- 学员：选课中心 / 我的选课 ---------- */
+
+function enrollSeatHtml(c) {
+  const pct = c.capacity ? Math.min(100, Math.round(c.enrolled / c.capacity * 100)) : 0;
+  return `<div style="min-width:110px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span style="font-weight:600;${c.isFull ? 'color:var(--danger)' : ''}">余 ${c.remaining} 个</span>
+      <span class="td-sub">${c.enrolled}/${c.capacity}</span>
+    </div>
+    <div class="progress"><span style="width:${pct}%"></span></div>
+  </div>`;
+}
+
+function enrollStatusHtml(c) {
+  if (c.myStatus) {
+    const wait = c.myStatus === '候补' && c.waitlistNo ? ` <span class="td-sub">第 ${c.waitlistNo} 位</span>` : '';
+    return badge(c.myStatus) + wait;
+  }
+  if (c.conflictClassName) return '<span class="badge badge-warning">时间冲突</span>';
+  return '<span class="td-sub">可报名</span>';
+}
+
+function studentCatalogRows() {
+  const cat = $('#catalog-cat')?.value || '';
+  const list = cat ? studentCatalog.filter(c => c.category === cat) : studentCatalog;
+  return list.map(c => `
+    <tr>
+      <td>
+        <div class="cell-main">${esc(c.courseName)}</div>
+        <div class="td-sub">${esc(c.className)} · ${esc(c.level || '')}</div>
+      </td>
+      <td style="white-space:nowrap">${esc(c.teacherName || '—')}</td>
+      <td class="td-sub" style="white-space:nowrap">${esc(c.schedule || '排课待定')}<br>${esc(c.classroom || '')}</td>
+      <td>${enrollSeatHtml(c)}</td>
+      <td style="white-space:nowrap">${money(c.price)}<div class="td-sub">${c.hours} 课时</div></td>
+      <td>${enrollStatusHtml(c)}</td>
+      <td class="td-actions">
+        ${c.canApply
+          ? `<button class="btn-link" data-act="apply" data-id="${esc(c.classId)}">${ICONS.plus}${c.isFull ? '候补' : '选课'}</button>`
+          : (c.conflictClassName ? `<span class="td-sub">与「${esc(c.conflictClassName)}」冲突</span>` : '')}
+      </td>
+    </tr>`).join('') || emptyRow(7, '暂无可选班级');
+}
+
+function studentCatalogHtml() {
+  const cats = [...new Set(studentCatalog.map(c => c.category).filter(Boolean))];
+  return `
+    <div class="card reveal" data-d="3" style="margin-top:16px">
+      <div class="card-head">
+        <div class="card-title">${ICONS.userplus} 选课中心</div>
+        <select class="select" id="catalog-cat" style="width:180px">
+          <option value="">全部课程方向</option>
+          ${cats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="card-body"><div class="table-wrap"><table>
+        <thead><tr><th>课程 / 班级</th><th>教师</th><th>上课时间</th><th>剩余名额</th><th>学费</th><th>我的状态</th><th>操作</th></tr></thead>
+        <tbody id="student-catalog">${studentCatalogRows()}</tbody>
+      </table></div></div>
+    </div>`;
+}
+
+function studentEnrollmentRows() {
+  return studentEnrollments.map(e => `
+    <tr>
+      <td>
+        <div class="cell-main">${esc(e.className || '—')}</div>
+        <div class="td-sub">${esc(e.courseName || '')}</div>
+      </td>
+      <td class="td-sub" style="white-space:nowrap">${esc(e.schedule || '—')}</td>
+      <td>${badge(e.status)}${e.status === '候补' && e.waitlistNo ? ` <span class="td-sub">第 ${e.waitlistNo} 位</span>` : ''}</td>
+      <td class="td-sub" style="white-space:nowrap">${esc(String(e.createdAt || '').slice(0, 10))}</td>
+      <td class="td-sub clamp-2">${esc(e.reviewNote || '—')}</td>
+      <td class="td-actions">
+        ${['待审核', '候补', '已通过'].includes(e.status)
+          ? `<button class="btn-link danger" data-act="withdraw" data-id="${e.id}">${ICONS.x}退课</button>` : ''}
+      </td>
+    </tr>`).join('') || emptyRow(6, '还没有选课记录，可在上方选课中心申请');
+}
+
+function studentEnrollmentsHtml() {
+  return `
+    <div class="card reveal" data-d="3" style="margin-top:16px">
+      <div class="card-head"><div class="card-title">${ICONS.filetext} 我的选课</div></div>
+      <div class="card-body"><div class="table-wrap"><table>
+        <thead><tr><th>班级</th><th>上课时间</th><th>状态</th><th>申请时间</th><th>审核意见</th><th>操作</th></tr></thead>
+        <tbody id="student-enrollments">${studentEnrollmentRows()}</tbody>
+      </table></div></div>
+    </div>`;
+}
+
+function renderStudentCatalog() {
+  const tbody = $('#student-catalog');
+  if (tbody) tbody.innerHTML = studentCatalogRows();
+}
+
+function renderStudentEnrollments() {
+  const tbody = $('#student-enrollments');
+  if (tbody) tbody.innerHTML = studentEnrollmentRows();
+}
+
+async function reloadStudentEnrollments() {
+  const [catalog, enrollments] = await Promise.all([api.catalog(), api.myEnrollments()]);
+  studentCatalog = catalog;
+  studentEnrollments = enrollments;
+  renderStudentCatalog();
+  renderStudentEnrollments();
+}
+
+function onStudentCatalogAction(e) {
+  const btn = e.target.closest('button[data-act="apply"]');
+  if (!btn) return;
+  const cls = studentCatalog.find(c => c.classId === btn.dataset.id);
+  if (!cls) return;
+  openApplyForm(cls, {
+    apply: note => api.applyEnrollment({ classId: cls.classId, note }),
+    after: reloadStudentEnrollments,
+  });
+}
+
+function onStudentEnrollmentAction(e) {
+  const btn = e.target.closest('button[data-act="withdraw"]');
+  if (!btn) return;
+  const row = studentEnrollments.find(x => x.id === btn.dataset.id);
+  if (!row) return;
+  askConfirm('退课确认',
+    `确定退出「${row.className}」吗？退课后该班名额将释放给候补学员。`,
+    async () => {
+      const data = await apiOk(() => api.withdrawEnrollment(row.id), '已退课');
+      if (!data) return;
+      await reloadStudentEnrollments();
+    });
+}
+
+/* 选课申请弹窗（学员 / 家长共用；payload 由调用方给出） */
+function openApplyForm(cls, extra) {
+  const body = `
+    <div class="form-grid">
+      <div class="form-item full">
+        <label>选课班级</label>
+        <div class="input" style="height:auto;background:var(--bg-soft)">
+          <b>${esc(cls.className)}</b>
+          <div class="td-sub">${esc(cls.courseName)} · ${esc(cls.teacherName || '教师待定')} · ${esc(cls.schedule || '排课待定')}</div>
+        </div>
+      </div>
+      <div class="form-item">
+        <label>学费</label>
+        <div style="font-size:20px;font-weight:600">${money(cls.price)}</div>
+      </div>
+      <div class="form-item">
+        <label>剩余名额</label>
+        <div style="font-size:20px;font-weight:600;${cls.isFull ? 'color:var(--danger)' : ''}">${cls.remaining} / ${cls.capacity}</div>
+      </div>
+      <div class="form-item full">
+        <label>备注（选填）</label>
+        <input class="input" id="en-note" maxlength="100" placeholder="如：希望老师多关注基础部分">
+      </div>
+      ${cls.isFull ? `<div class="form-item full"><div class="td-sub">该班名额已满，提交后将进入候补，名额释放时按顺位自动转正。</div></div>` : ''}
+    </div>`;
+  openPortalModal('提交选课申请', body, cls.isFull ? '加入候补' : '提交申请', async () => {
+    const note = $('#en-note').value.trim();
+    const data = await apiOk(() => extra.apply(note));
+    if (!data) return false;
+    showToast(data.message || '选课申请已提交');
+    if (extra.after) await extra.after();
+    return true;
+  });
 }
 
 function studentStatsHtml() {
@@ -537,10 +723,13 @@ function studentInfoHtml() {
       <div class="card-head"><div class="card-title">${ICONS.idcard} 我的学籍</div></div>
       <div class="card-body">
         <div class="kv-grid">
-          <div><span class="kv-k">班级</span><span class="kv-v">${esc(CTX.className || '–')}</span></div>
+          <div><span class="kv-k">班级</span><span class="kv-v">${esc(CTX.className || '待分班')}</span></div>
           <div><span class="kv-k">课程</span><span class="kv-v">${esc(CTX.courseName || '–')}</span></div>
           <div><span class="kv-k">带班教师</span><span class="kv-v">${esc(CTX.teacherName || '–')}</span></div>
           <div><span class="kv-k">上课时间</span><span class="kv-v">${esc(CTX.schedule || '–')}</span></div>
+          ${(CTX.classNames || []).length > 1
+            ? `<div><span class="kv-k">兼报班级</span><span class="kv-v">${esc(CTX.classNames.slice(1).join('、'))}</span></div>`
+            : ''}
         </div>
       </div>
     </div>`;
@@ -689,13 +878,19 @@ async function loadStudentPayments() {
 
 async function initParent(el) {
   CHILDREN = CTX.children || [];
-  [parentAssignments, parentAttendance] = await Promise.all([
+  parentEnrollChild = CHILDREN.length ? CHILDREN[0].studentId : '';
+  [parentAssignments, parentAttendance, parentEnrollments, parentCatalog] = await Promise.all([
     api.parentAssignments(),
     api.parentAttendance(),
+    api.parentEnrollments(),
+    parentEnrollChild ? api.catalog(parentEnrollChild) : Promise.resolve([]),
   ]);
   el.insertAdjacentHTML('beforeend', parentStatsHtml());
   el.insertAdjacentHTML('beforeend', parentChildrenHtml());
+  el.insertAdjacentHTML('beforeend', parentEnrollCatalogHtml());
+  el.insertAdjacentHTML('beforeend', parentEnrollmentsHtml());
   el.insertAdjacentHTML('beforeend', timetableHtml('孩子课表'));
+
   el.insertAdjacentHTML('beforeend', parentPaymentsHtml());
   el.insertAdjacentHTML('beforeend', parentAssignmentsHtml());
   el.insertAdjacentHTML('beforeend', parentAttendanceHtml());
@@ -707,9 +902,152 @@ async function initParent(el) {
     parentChildFilter = e.target.value;
     renderParentAttendance();
   });
+  $('#parent-enroll-filter')?.addEventListener('change', async e => {
+    parentEnrollChild = e.target.value;
+    await loadParentCatalog();
+  });
+  $('#parent-catalog')?.addEventListener('click', onParentCatalogAction);
+  $('#parent-enrollments')?.addEventListener('click', onParentEnrollmentAction);
   initParentPayments();
+
   await initTimetable('孩子课表');
+
 }
+
+/* ---------- 家长：孩子选课 ---------- */
+
+function parentEnrollCatalogRows() {
+  return parentCatalog.map(c => `
+    <tr>
+      <td>
+        <div class="cell-main">${esc(c.courseName)}</div>
+        <div class="td-sub">${esc(c.className)} · ${esc(c.level || '')}</div>
+      </td>
+      <td style="white-space:nowrap">${esc(c.teacherName || '—')}</td>
+      <td class="td-sub" style="white-space:nowrap">${esc(c.schedule || '排课待定')}<br>${esc(c.classroom || '')}</td>
+      <td>${enrollSeatHtml(c)}</td>
+      <td style="white-space:nowrap">${money(c.price)}<div class="td-sub">${c.hours} 课时</div></td>
+      <td>${enrollStatusHtml(c)}</td>
+      <td class="td-actions">
+        ${c.canApply
+          ? `<button class="btn-link" data-act="apply" data-id="${esc(c.classId)}">${ICONS.plus}${c.isFull ? '候补' : '为TA报名'}</button>`
+          : (c.conflictClassName ? `<span class="td-sub">与「${esc(c.conflictClassName)}」冲突</span>` : '')}
+      </td>
+    </tr>`).join('') || emptyRow(7, '暂无可选班级');
+}
+
+function parentEnrollCatalogHtml() {
+  const options = CHILDREN.map(c =>
+    `<option value="${esc(c.studentId)}" ${c.studentId === parentEnrollChild ? 'selected' : ''}>${esc(c.name)}</option>`
+  ).join('');
+  return `
+    <div class="card reveal" data-d="2" style="margin-top:16px">
+      <div class="card-head">
+        <div class="card-title">${ICONS.userplus} 孩子选课</div>
+        ${CHILDREN.length > 1
+          ? `<select class="select" id="parent-enroll-filter" style="width:180px">${options}</select>`
+          : `<div class="td-sub">${esc((CHILDREN[0] || {}).name || '')}</div>`}
+      </div>
+      <div class="card-body"><div class="table-wrap"><table>
+        <thead><tr><th>课程 / 班级</th><th>教师</th><th>上课时间</th><th>剩余名额</th><th>学费</th><th>选课状态</th><th>操作</th></tr></thead>
+        <tbody id="parent-catalog">${parentEnrollCatalogRows()}</tbody>
+      </table></div></div>
+    </div>`;
+}
+
+function parentEnrollmentRows() {
+  return parentEnrollments.map(e => `
+    <tr>
+      <td>${esc(e.studentName || e.studentId)}</td>
+      <td>
+        <div class="cell-main">${esc(e.className || '—')}</div>
+        <div class="td-sub">${esc(e.courseName || '')}</div>
+      </td>
+      <td class="td-sub" style="white-space:nowrap">${esc(e.schedule || '—')}</td>
+      <td>${badge(e.status)}${e.status === '候补' && e.waitlistNo ? ` <span class="td-sub">第 ${e.waitlistNo} 位</span>` : ''}</td>
+      <td class="td-sub" style="white-space:nowrap">${esc(String(e.createdAt || '').slice(0, 10))}</td>
+      <td class="td-sub clamp-2">${esc(e.reviewNote || '—')}</td>
+      <td class="td-actions">
+        ${['待审核', '候补', '已通过'].includes(e.status)
+          ? `<button class="btn-link danger" data-act="withdraw" data-id="${e.id}">${ICONS.x}退课</button>` : ''}
+      </td>
+    </tr>`).join('') || emptyRow(7, '暂无选课记录');
+}
+
+function parentEnrollmentsHtml() {
+  return `
+    <div class="card reveal" data-d="3" style="margin-top:16px">
+      <div class="card-head"><div class="card-title">${ICONS.filetext} 选课记录</div></div>
+      <div class="card-body"><div class="table-wrap"><table>
+        <thead><tr><th>学员</th><th>班级</th><th>上课时间</th><th>状态</th><th>申请时间</th><th>审核意见</th><th>操作</th></tr></thead>
+        <tbody id="parent-enrollments">${parentEnrollmentRows()}</tbody>
+      </table></div></div>
+    </div>`;
+}
+
+function renderParentCatalog() {
+  const tbody = $('#parent-catalog');
+  if (tbody) tbody.innerHTML = parentEnrollCatalogRows();
+}
+
+function renderParentEnrollments() {
+  const tbody = $('#parent-enrollments');
+  if (tbody) tbody.innerHTML = parentEnrollmentRows();
+}
+
+async function loadParentCatalog() {
+  const tbody = $('#parent-catalog');
+  if (tbody) tbody.innerHTML = emptyRow(7, '加载中…');
+  try {
+    parentCatalog = parentEnrollChild ? await api.catalog(parentEnrollChild) : [];
+  } catch (e) {
+    showToast(e.message, 'error');
+    parentCatalog = [];
+  }
+  renderParentCatalog();
+}
+
+async function reloadParentEnrollments() {
+  const [enrollments, catalog] = await Promise.all([
+    api.parentEnrollments(),
+    parentEnrollChild ? api.catalog(parentEnrollChild) : Promise.resolve([]),
+  ]);
+  parentEnrollments = enrollments;
+  parentCatalog = catalog;
+  renderParentCatalog();
+  renderParentEnrollments();
+}
+
+function onParentCatalogAction(e) {
+  const btn = e.target.closest('button[data-act="apply"]');
+  if (!btn) return;
+  if (!parentEnrollChild) { showToast('请先选择学员', 'error'); return; }
+  const cls = parentCatalog.find(c => c.classId === btn.dataset.id);
+  if (!cls) return;
+  openApplyForm(cls, {
+    apply: note => api.parentApplyEnrollment({
+      studentId: parentEnrollChild,
+      classId: cls.classId,
+      note,
+    }),
+    after: reloadParentEnrollments,
+  });
+}
+
+function onParentEnrollmentAction(e) {
+  const btn = e.target.closest('button[data-act="withdraw"]');
+  if (!btn) return;
+  const row = parentEnrollments.find(x => x.id === btn.dataset.id);
+  if (!row) return;
+  askConfirm('退课确认',
+    `确定为「${row.studentName}」退出「${row.className}」吗？名额将释放给候补学员。`,
+    async () => {
+      const data = await apiOk(() => api.parentWithdrawEnrollment(row.id), '已退课');
+      if (!data) return;
+      await reloadParentEnrollments();
+    });
+}
+
 
 function parentStatsHtml() {
   const pending = parentAssignments.filter(a => a.assignmentStatus === '进行中'

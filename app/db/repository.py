@@ -29,6 +29,7 @@ from app.db.models import (
     ClassSession,
     Config,
     Course,
+    Enrollment,
     News,
     Payment,
     Resource,
@@ -55,6 +56,8 @@ MODELS: dict[str, type] = {
     "assignments": Assignment,
     "submissions": Submission,
     "attendance": Attendance,
+    "enrollments": Enrollment,
+
 }
 PK_OF = {name: ("username" if name == "users" else "id") for name in MODELS}
 
@@ -241,8 +244,8 @@ class DB:
             if stu is None or stu.deletedAt is not None:
                 raise BizException(404, "学员不存在或已被删除")
             stu.deletedAt = ts
-            # 批量软删该学员的全部缴费记录与应收账单（避免逐条 ORM 迭代的刷写边界问题）
-            for Model in (Payment, Bill):
+            # 批量软删该学员的全部缴费记录、应收账单与选课记录（避免逐条 ORM 迭代的刷写边界问题）
+            for Model in (Payment, Bill, Enrollment):
                 s.execute(
                     _sa_update(Model)
                     .where(Model.studentId == code, Model.deletedAt.is_(None))
